@@ -82,10 +82,12 @@
 - [ ] Combi: annotated screenshot + voice/tekst = één bericht naar Kees
 - [ ] Notificatie als Kees antwoordt terwijl paneel dicht is
 
-### 2.7 Screenshot Pipeline 📸 🔄 STARTED
+### 2.7 Screenshot Pipeline 📸 ✅ DONE
 - [x] Fix: Snap voor Kees knop maakt composiet screenshot (webview + canvas overlay)
 - [x] Screenshot → clipboard (Electron clipboard.writeImage)
 - [x] Screenshot → bestand opslaan (~/Pictures/Tandem/)
+- [x] Cmd+Shift+S quick screenshot werkt zonder draw mode
+- [x] Clickable thumbnails in Screenshots tab (opent full-size viewer)
 - [ ] Screenshot → Apple Photos library (via `osascript` / Photos framework)
 - [ ] Screenshot → Google Photos (via API, instelbaar)
 - [ ] Configuratiescherm: aan/uit per bestemming
@@ -107,13 +109,17 @@
 - [ ] Data export/import
 - [ ] Opslag in ~/.tandem/config.json
 
-### 2.9 Custom New Tab — Kees.ai 🧀
-- [ ] Custom new-tab page in plaats van DuckDuckGo
-- [ ] Kees chat direct in new-tab (geen externe AI nodig)
-- [ ] Snelle acties: "zoek...", "open...", "wat staat er op mijn agenda?"
-- [ ] Recente tabs / bookmarks overzicht
-- [ ] Weerwidget (Herent)
-- [ ] Tandem branding + Robin's voorkeuren
+### 2.9 Custom New Tab — Kees.ai 🧀 ✅ DONE
+- [x] Custom new-tab page (shell/newtab.html) in plaats van DuckDuckGo
+- [x] Kees chat widget in new-tab (bottom-right, collapsible)
+- [x] Zoekbalk: DuckDuckGo zoeken of URL navigatie
+- [x] Quick links: LinkedIn, GitHub, Kanbu, ClaroNote, DuckDuckGo, Gmail, YouTube, Reddit
+- [x] Recente tabs overzicht (via API)
+- [x] Tandem branding + donker thema
+- [x] URL bar leeg bij nieuwe tab
+- [ ] Snelle acties: "wat staat er op mijn agenda?" (later)
+- [ ] Weerwidget (Herent) (later)
+- [ ] Instelbare quick links via config (later)
 
 ### 2.8 Behavioral Learning 🧬
 - [x] Observation layer: track mouse, clicks, scroll, keypress via Electron events

@@ -2,6 +2,27 @@
 
 ## [Unreleased] — 2026-02-11
 
+### 📸 Phase 2.7 — Screenshot Pipeline Voltooien
+- Screenshot thumbnails in Kees paneel zijn nu clickable (opent full-size viewer in popup)
+- Cmd+Shift+S quick screenshot werkt zonder draw mode (verified)
+- Volledige pipeline: clipboard + ~/Pictures/Tandem/ + base64 panel preview
+
+### 🧀 Phase 2.9 — Custom New Tab (Kees.ai)
+- Nieuwe `shell/newtab.html` — custom new tab pagina
+- Donker thema matching Tandem, centered layout met Tandem logo + 🧀
+- Grote zoekbalk: submit → DuckDuckGo of directe URL navigatie
+- Quick links: LinkedIn, GitHub, Kanbu, ClaroNote, DuckDuckGo, Gmail, YouTube, Reddit (met favicons)
+- Recente tabs sectie (haalt data op van /tabs/list API)
+- Kees chat widget rechtsonder (collapsible, met message polling)
+- Nieuwe tabs laden newtab.html i.p.v. DuckDuckGo
+- URL bar automatisch leeg bij new tab pagina's
+
+### 🛡️ Bonus — Electron Fingerprint Hardening
+- Complete `window.chrome` mock (runtime, loadTimes, csi, app met alle sub-objects)
+- Verwijder Electron giveaways: window.process, require, module, exports, Buffer, __dirname, __filename
+- `navigator.userAgentData` mock matching Chrome 131 (inclusief getHighEntropyValues)
+- Verbeterde stealth voor bot-detectie tests (sannysoft, creepjs)
+
 ### 🐛 Bugfixes
 - **Voice input**: Auto-restart recognition after `onend` event so continuous listening works 10s+
 - **Voice UI**: Larger pulsating indicator (16px dot), "Spreek nu..." text, prominent styling
