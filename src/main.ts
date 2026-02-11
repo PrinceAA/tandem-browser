@@ -83,25 +83,31 @@ async function createWindow(): Promise<BrowserWindow> {
 
       // Intercept Google login — open in native BrowserWindow (not webview)
       // Google blocks sign-in from embedded browsers (webview), but allows BrowserWindow
+      const isGoogleLogin = (url: string) => 
+        url.includes('accounts.google.com/') && 
+        !url.includes('accounts.google.com/CheckCookie') &&
+        !url.includes('accounts.google.com/RotateCookies');
+
       contents.on('will-navigate', (event, url) => {
-        if (url.includes('accounts.google.com/signin') || 
-            url.includes('accounts.google.com/o/oauth2') ||
-            url.includes('accounts.google.com/v3/signin') ||
-            url.includes('accounts.google.com/ServiceLogin') ||
-            url.includes('accounts.google.com/AccountChooser')) {
+        if (isGoogleLogin(url)) {
+          console.log('🔑 Intercepting Google login (will-navigate):', url.substring(0, 80));
           event.preventDefault();
           openGoogleLoginPopup(url, contents);
         }
       });
 
-      // Also catch redirects to Google login
       contents.on('will-redirect', (event, url) => {
-        if (url.includes('accounts.google.com/signin') || 
-            url.includes('accounts.google.com/o/oauth2') ||
-            url.includes('accounts.google.com/v3/signin') ||
-            url.includes('accounts.google.com/ServiceLogin') ||
-            url.includes('accounts.google.com/AccountChooser')) {
+        if (isGoogleLogin(url)) {
+          console.log('🔑 Intercepting Google login (will-redirect):', url.substring(0, 80));
           event.preventDefault();
+          openGoogleLoginPopup(url, contents);
+        }
+      });
+
+      // Catch when Google login page is already loaded (direct URL entry)
+      contents.on('did-navigate', (_event, url) => {
+        if (isGoogleLogin(url)) {
+          console.log('🔑 Google login detected after load (did-navigate):', url.substring(0, 80));
           openGoogleLoginPopup(url, contents);
         }
       });
@@ -525,15 +531,8 @@ app.whenReady().then(async () => {
   await startAPI(win);
   registerShortcuts();
 
-  // Only capture global shortcuts when our window is focused
-  win.on('focus', () => {
-    if (!globalShortcut.isRegistered('CommandOrControl+T')) {
-      registerShortcuts();
-    }
-  });
-  win.on('blur', () => {
-    unregisterShortcuts();
-  });
+  // Keep shortcuts always registered while app is running
+  // (blur/focus approach broke shortcuts when webview had focus)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
