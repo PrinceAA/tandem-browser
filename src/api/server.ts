@@ -25,6 +25,8 @@ import { ChromeImporter } from '../import/chrome-importer';
 import { BookmarkManager } from '../bookmarks/manager';
 import { HistoryManager } from '../history/manager';
 import { DownloadManager } from '../downloads/manager';
+import { AudioCaptureManager } from '../audio/capture';
+import { ExtensionLoader } from '../extensions/loader';
 
 export class TandemAPI {
   private app: express.Application;
@@ -49,8 +51,10 @@ export class TandemAPI {
   private bookmarkManager: BookmarkManager;
   private historyManager: HistoryManager;
   private downloadManager: DownloadManager;
+  private audioCaptureManager: AudioCaptureManager;
+  private extensionLoader: ExtensionLoader;
 
-  constructor(win: BrowserWindow, port: number = 8765, tabManager: TabManager, panelManager: PanelManager, drawManager: DrawOverlayManager, activityTracker: ActivityTracker, voiceManager: VoiceManager, behaviorObserver: BehaviorObserver, configManager: ConfigManager, siteMemory: SiteMemoryManager, watchManager: WatchManager, headlessManager: HeadlessManager, formMemory: FormMemoryManager, contextBridge: ContextBridge, pipManager: PiPManager, networkInspector: NetworkInspector, chromeImporter: ChromeImporter, bookmarkManager: BookmarkManager, historyManager: HistoryManager, downloadManager: DownloadManager) {
+  constructor(win: BrowserWindow, port: number = 8765, tabManager: TabManager, panelManager: PanelManager, drawManager: DrawOverlayManager, activityTracker: ActivityTracker, voiceManager: VoiceManager, behaviorObserver: BehaviorObserver, configManager: ConfigManager, siteMemory: SiteMemoryManager, watchManager: WatchManager, headlessManager: HeadlessManager, formMemory: FormMemoryManager, contextBridge: ContextBridge, pipManager: PiPManager, networkInspector: NetworkInspector, chromeImporter: ChromeImporter, bookmarkManager: BookmarkManager, historyManager: HistoryManager, downloadManager: DownloadManager, audioCaptureManager: AudioCaptureManager, extensionLoader: ExtensionLoader) {
     this.win = win;
     this.port = port;
     this.tabManager = tabManager;
@@ -71,6 +75,8 @@ export class TandemAPI {
     this.bookmarkManager = bookmarkManager;
     this.historyManager = historyManager;
     this.downloadManager = downloadManager;
+    this.audioCaptureManager = audioCaptureManager;
+    this.extensionLoader = extensionLoader;
     this.app = express();
     this.app.use(cors());
     this.app.use(express.json());
@@ -1171,6 +1177,75 @@ export class TandemAPI {
       try {
         const downloads = this.downloadManager.listActive();
         res.json({ downloads });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
+      }
+    });
+
+    // ═══════════════════════════════════════════════
+    // AUDIO CAPTURE — Phase 5.6
+    // ═══════════════════════════════════════════════
+
+    this.app.post('/audio/start', async (_req: Request, res: Response) => {
+      try {
+        const activeTab = this.tabManager.getActiveTab();
+        if (!activeTab) { res.status(400).json({ error: 'No active tab' }); return; }
+        const result = await this.audioCaptureManager.startRecording(activeTab.webContentsId);
+        res.json(result);
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
+      }
+    });
+
+    this.app.post('/audio/stop', (_req: Request, res: Response) => {
+      try {
+        const result = this.audioCaptureManager.stopRecording();
+        res.json(result);
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
+      }
+    });
+
+    this.app.get('/audio/status', (_req: Request, res: Response) => {
+      try {
+        res.json(this.audioCaptureManager.getStatus());
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
+      }
+    });
+
+    this.app.get('/audio/recordings', (req: Request, res: Response) => {
+      try {
+        const limit = parseInt(req.query.limit as string) || 50;
+        const recordings = this.audioCaptureManager.listRecordings(limit);
+        res.json({ recordings });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
+      }
+    });
+
+    // ═══════════════════════════════════════════════
+    // EXTENSIONS — Phase 5.7
+    // ═══════════════════════════════════════════════
+
+    this.app.get('/extensions/list', (_req: Request, res: Response) => {
+      try {
+        const loaded = this.extensionLoader.listLoaded();
+        const available = this.extensionLoader.listAvailable();
+        res.json({ loaded, available });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
+      }
+    });
+
+    this.app.post('/extensions/load', async (req: Request, res: Response) => {
+      try {
+        const { path: extPath } = req.body;
+        if (!extPath) { res.status(400).json({ error: 'path required' }); return; }
+        const partition = 'persist:tandem';
+        const ses = this.win.webContents.session;
+        const result = await this.extensionLoader.loadExtension(ses, extPath);
+        res.json({ ok: true, extension: result });
       } catch (e: any) {
         res.status(500).json({ error: e.message });
       }

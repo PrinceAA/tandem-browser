@@ -272,17 +272,35 @@
 
 ---
 
-## Phase 4: Advanced Stealth 🔒
-> Onzichtbaar voor elke detectie.
+## Phase 5: Advanced Stealth + Audio Capture 🔒🎵
+> Fingerprint protection, audio capture, extension support.
 
-- [ ] Canvas fingerprint randomisatie
-- [ ] WebGL renderer/vendor spoofing
-- [ ] Font enumeration masking
-- [ ] AudioContext fingerprint spoofing
+### 5.1-5.5 Advanced Fingerprint Protection ✅ DONE
+- [x] Canvas fingerprint randomisatie (seeded noise ±2 per channel)
+- [x] WebGL renderer/vendor spoofing (ANGLE Apple M1 OpenGL 4.1)
+- [x] WebGL getSupportedExtensions override (standard Chrome set)
+- [x] Font enumeration masking (standard macOS fonts only)
+- [x] AudioContext fingerprint spoofing (AnalyserNode + OfflineAudioContext noise)
+- [x] Timing protection: performance.now() reduced to 100μs, Date.now() ±1ms jitter
+- [x] All patches via main process webview injection (not content scripts)
+- [x] Seeded PRNG: consistent noise per session, different from real Chrome
+
+### 5.6 Tab Audio Capture ✅ DONE
+- [x] AudioCaptureManager class (src/audio/capture.ts)
+- [x] Cmd+R → start/stop recording of current tab
+- [x] Recordings saved in ~/.tandem/recordings/
+- [x] API: POST /audio/start, POST /audio/stop, GET /audio/status, GET /audio/recordings
+
+### 5.7 Extension Support (basis) ✅ DONE
+- [x] ExtensionLoader class (src/extensions/loader.ts)
+- [x] Auto-load from ~/.tandem/extensions/ on startup
+- [x] session.loadExtension() for unpacked Chrome extensions
+- [x] API: GET /extensions/list, POST /extensions/load
+
+### Remaining Stealth TODO
 - [ ] Proxy support (SOCKS5/HTTP, per-tab of globaal)
 - [ ] Request interception (headers wijzigen/blokkeren)
 - [ ] TLS/JA3 fingerprint matching
-- [ ] Timing humanisatie (random delays 50-200ms bij automated actions)
 - [ ] Screen resolution spoofing
 - [ ] Battery API masking
 - [ ] Geolocation spoofing (optioneel)

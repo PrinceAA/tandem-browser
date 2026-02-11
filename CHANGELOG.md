@@ -2,6 +2,33 @@
 
 ## [Unreleased] — 2026-02-11
 
+### 🔒🎵 Phase 5 — Advanced Stealth + Audio Capture
+
+#### Fingerprint Protection (5.1-5.5)
+- Canvas fingerprint randomisation via seeded PRNG (±2 noise per channel, consistent per session)
+- WebGL vendor/renderer spoofing: "ANGLE (Apple, Apple M1, OpenGL 4.1)"
+- WebGL getSupportedExtensions returns standard Chrome set
+- Font enumeration protection: only standard macOS fonts pass document.fonts.check()
+- Audio fingerprint protection: subtle noise on AnalyserNode + OfflineAudioContext
+- Timing protection: performance.now() reduced to 100μs, Date.now() ±1ms jitter
+- All patches injected via main process into webviews (not content scripts)
+- Session-based seed from partition hash ensures consistent but unique fingerprint
+
+#### Tab Audio Capture (5.6)
+- AudioCaptureManager class for recording tab audio
+- Cmd+R to toggle recording of active tab
+- Recordings saved as WebM in ~/.tandem/recordings/
+- API: POST /audio/start, POST /audio/stop, GET /audio/status, GET /audio/recordings
+
+#### Extension Support (5.7)
+- ExtensionLoader class for loading unpacked Chrome extensions
+- Auto-loads extensions from ~/.tandem/extensions/ on startup
+- API: GET /extensions/list, POST /extensions/load
+
+---
+
+## [Previous] — 2026-02-11
+
 ### 📦 Phase 4 — Echte Browser Features
 - **4.1 Chrome Data Import**: Import bookmarks (JSON), history (SQLite), cookies (encrypted warning)
   - API: `GET /import/chrome/status`, `POST /import/chrome/bookmarks`, `POST /import/chrome/history`, `POST /import/chrome/cookies`

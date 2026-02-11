@@ -1,4 +1,4 @@
-import { app, BrowserWindow, session, ipcMain, Notification, globalShortcut, clipboard, nativeImage } from 'electron';
+import { app, BrowserWindow, session, ipcMain, Notification, globalShortcut, clipboard, nativeImage, webContents } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
@@ -22,6 +22,8 @@ import { ChromeImporter } from './import/chrome-importer';
 import { BookmarkManager } from './bookmarks/manager';
 import { HistoryManager } from './history/manager';
 import { DownloadManager } from './downloads/manager';
+import { AudioCaptureManager } from './audio/capture';
+import { ExtensionLoader } from './extensions/loader';
 
 const IS_DEV = process.argv.includes('--dev');
 const API_PORT = 8765;
@@ -46,13 +48,28 @@ let chromeImporter: ChromeImporter | null = null;
 let bookmarkManager: BookmarkManager | null = null;
 let historyManager: HistoryManager | null = null;
 let downloadManager: DownloadManager | null = null;
+let audioCaptureManager: AudioCaptureManager | null = null;
+let extensionLoader: ExtensionLoader | null = null;
 
 async function createWindow(): Promise<BrowserWindow> {
   const partition = 'persist:tandem';
   const ses = session.fromPartition(partition);
 
-  const stealth = new StealthManager(ses);
+  const stealth = new StealthManager(ses, partition);
   await stealth.apply();
+
+  // Inject stealth script into all webviews via session preload
+  const stealthSeed = stealth.getPartitionSeed();
+  const stealthScript = StealthManager.getStealthScript(stealthSeed);
+
+  // Apply stealth patches to every webview's webContents on creation
+  app.on('web-contents-created', (_event, contents) => {
+    if (contents.getType() === 'webview') {
+      contents.on('dom-ready', () => {
+        contents.executeJavaScript(stealthScript).catch(() => {});
+      });
+    }
+  });
 
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -101,13 +118,20 @@ async function startAPI(win: BrowserWindow): Promise<void> {
   bookmarkManager = new BookmarkManager();
   historyManager = new HistoryManager();
   downloadManager = new DownloadManager();
+  audioCaptureManager = new AudioCaptureManager();
+  extensionLoader = new ExtensionLoader();
 
   // Hook download manager into session
   const partition = 'persist:tandem';
   const ses = session.fromPartition(partition);
   downloadManager.hookSession(ses, win);
 
-  api = new TandemAPI(win, API_PORT, tabManager, panelManager, drawManager, activityTracker, voiceManager, behaviorObserver, configManager, siteMemory, watchManager, headlessManager, formMemory, contextBridge, pipManager, networkInspector, chromeImporter, bookmarkManager, historyManager, downloadManager);
+  // Load extensions from ~/.tandem/extensions/
+  extensionLoader.loadAllExtensions(ses).catch((err) => {
+    console.warn('⚠️ Failed to load some extensions:', err);
+  });
+
+  api = new TandemAPI(win, API_PORT, tabManager, panelManager, drawManager, activityTracker, voiceManager, behaviorObserver, configManager, siteMemory, watchManager, headlessManager, formMemory, contextBridge, pipManager, networkInspector, chromeImporter, bookmarkManager, historyManager, downloadManager, audioCaptureManager, extensionLoader);
   await api.start();
   console.log(`🧠 Tandem API running on http://localhost:${API_PORT}`);
 
@@ -351,6 +375,23 @@ function registerShortcuts(): void {
   // Cmd+, — open settings
   globalShortcut.register('CommandOrControl+,', () => {
     mainWindow?.webContents.send('shortcut', 'open-settings');
+  });
+
+  // Cmd+R — toggle audio recording of current tab
+  globalShortcut.register('CommandOrControl+R', () => {
+    if (audioCaptureManager) {
+      if (audioCaptureManager.isRecording()) {
+        audioCaptureManager.stopRecording();
+        mainWindow?.webContents.send('audio-recording-status', { recording: false });
+      } else {
+        const activeTab = tabManager?.getActiveTab();
+        if (activeTab) {
+          audioCaptureManager.startRecording(activeTab.webContentsId).then(() => {
+            mainWindow?.webContents.send('audio-recording-status', { recording: true });
+          }).catch(() => {});
+        }
+      }
+    }
   });
 
   // Cmd+1-9 — switch tabs
