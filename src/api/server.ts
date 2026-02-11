@@ -1,101 +1,100 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import http from 'http';
-import { BrowserWindow, ipcMain } from 'electron';
+import { BrowserWindow } from 'electron';
 import { copilotAlert } from '../main';
+import { TabManager } from '../tabs/manager';
+import { humanizedClick, humanizedType } from '../input/humanized';
 
 export class TandemAPI {
   private app: express.Application;
   private server: http.Server | null = null;
   private win: BrowserWindow;
   private port: number;
+  private tabManager: TabManager;
 
-  constructor(win: BrowserWindow, port: number = 8765) {
+  constructor(win: BrowserWindow, port: number = 8765, tabManager: TabManager) {
     this.win = win;
     this.port = port;
+    this.tabManager = tabManager;
     this.app = express();
     this.app.use(cors());
     this.app.use(express.json());
     this.setupRoutes();
   }
 
-  private getWebview(): Promise<Electron.WebContents | null> {
-    return this.win.webContents.executeJavaScript(`
-      (() => {
-        const wv = document.querySelector('webview');
-        return wv ? wv.getWebContentsId() : null;
-      })()
-    `).then(id => {
-      if (!id) return null;
-      const { webContents } = require('electron');
-      return webContents.fromId(id) || null;
-    }).catch(() => null);
+  /** Get active tab's WebContents, or null */
+  private async getActiveWC(): Promise<Electron.WebContents | null> {
+    return this.tabManager.getActiveWebContents();
+  }
+
+  /** Helper to run JS in the active tab's webview */
+  private async execInActiveTab(code: string): Promise<any> {
+    const wc = await this.getActiveWC();
+    if (!wc) throw new Error('No active tab');
+    return wc.executeJavaScript(code);
   }
 
   private setupRoutes(): void {
-    // Health check
+    // ═══════════════════════════════════════════════
+    // STATUS
+    // ═══════════════════════════════════════════════
+
     this.app.get('/status', async (_req: Request, res: Response) => {
       try {
-        const status = await this.win.webContents.executeJavaScript(`
-          (() => {
-            const wv = document.querySelector('webview');
-            if (!wv) return { ready: false };
-            return {
-              ready: true,
-              url: wv.getURL(),
-              title: wv.getTitle ? wv.getTitle() : '',
-              loading: wv.isLoading ? wv.isLoading() : false
-            };
-          })()
-        `);
-        res.json(status);
+        const tab = this.tabManager.getActiveTab();
+        if (!tab) {
+          res.json({ ready: false, tabs: 0 });
+          return;
+        }
+        const wc = await this.getActiveWC();
+        res.json({
+          ready: !!wc,
+          url: tab.url,
+          title: tab.title,
+          loading: wc ? wc.isLoading() : false,
+          activeTab: tab.id,
+          tabs: this.tabManager.count,
+        });
       } catch (e: any) {
         res.json({ ready: false, error: e.message });
       }
     });
 
-    // Navigate to URL
+    // ═══════════════════════════════════════════════
+    // NAVIGATION
+    // ═══════════════════════════════════════════════
+
     this.app.post('/navigate', async (req: Request, res: Response) => {
       const { url } = req.body;
-      if (!url) return res.status(400).json({ error: 'url required' });
-
+      if (!url) { res.status(400).json({ error: 'url required' }); return; }
       try {
-        await this.win.webContents.executeJavaScript(`
-          document.querySelector('webview').loadURL(${JSON.stringify(url)})
-        `);
+        const wc = await this.getActiveWC();
+        if (!wc) { res.status(500).json({ error: 'No active tab' }); return; }
+        wc.loadURL(url);
         res.json({ ok: true, url });
       } catch (e: any) {
         res.status(500).json({ error: e.message });
       }
     });
 
-    // Get page content as text
+    // ═══════════════════════════════════════════════
+    // PAGE CONTENT
+    // ═══════════════════════════════════════════════
+
     this.app.get('/page-content', async (_req: Request, res: Response) => {
       try {
-        const content = await this.win.webContents.executeJavaScript(`
-          new Promise((resolve) => {
-            const wv = document.querySelector('webview');
-            wv.executeJavaScript(\`
-              (() => {
-                // Extract readable content
-                const title = document.title;
-                const url = window.location.href;
-                const meta = document.querySelector('meta[name="description"]');
-                const description = meta ? meta.getAttribute('content') : '';
-                
-                // Get main text content, clean up
-                const body = document.body.cloneNode(true);
-                // Remove scripts, styles, nav, footer, ads
-                body.querySelectorAll('script, style, nav, footer, aside, [role="banner"], [role="navigation"], .ad, .ads, .advertisement').forEach(el => el.remove());
-                
-                const text = body.innerText
-                  .replace(/\\n{3,}/g, '\\n\\n')
-                  .trim();
-                
-                return { title, url, description, text, length: text.length };
-              })()
-            \`).then(resolve);
-          })
+        const content = await this.execInActiveTab(`
+          (() => {
+            const title = document.title;
+            const url = window.location.href;
+            const meta = document.querySelector('meta[name="description"]');
+            const description = meta ? meta.getAttribute('content') : '';
+            const body = document.body.cloneNode(true);
+            body.querySelectorAll('script, style, nav, footer, aside, [role="banner"], [role="navigation"], .ad, .ads, .advertisement').forEach(el => el.remove());
+            const text = body.innerText.replace(/\\n{3,}/g, '\\n\\n').trim();
+            return { title, url, description, text, length: text.length };
+          })()
         `);
         res.json(content);
       } catch (e: any) {
@@ -103,102 +102,78 @@ export class TandemAPI {
       }
     });
 
-    // Get page HTML
     this.app.get('/page-html', async (_req: Request, res: Response) => {
       try {
-        const html = await this.win.webContents.executeJavaScript(`
-          new Promise((resolve) => {
-            const wv = document.querySelector('webview');
-            wv.executeJavaScript('document.documentElement.outerHTML').then(resolve);
-          })
-        `);
+        const html = await this.execInActiveTab('document.documentElement.outerHTML');
         res.type('html').send(html);
       } catch (e: any) {
         res.status(500).json({ error: e.message });
       }
     });
 
-    // Click an element
+    // ═══════════════════════════════════════════════
+    // CLICK — via sendInputEvent (Event.isTrusted = true)
+    // ═══════════════════════════════════════════════
+
     this.app.post('/click', async (req: Request, res: Response) => {
       const { selector } = req.body;
-      if (!selector) return res.status(400).json({ error: 'selector required' });
-
+      if (!selector) { res.status(400).json({ error: 'selector required' }); return; }
       try {
-        const result = await this.win.webContents.executeJavaScript(`
-          new Promise((resolve) => {
-            const wv = document.querySelector('webview');
-            wv.executeJavaScript(\`
-              (() => {
-                const el = document.querySelector(${JSON.stringify(selector)});
-                if (!el) return { ok: false, error: 'Element not found' };
-                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                el.click();
-                return { ok: true, tag: el.tagName, text: el.textContent?.substring(0, 100) };
-              })()
-            \`).then(resolve);
-          })
-        `);
+        const wc = await this.getActiveWC();
+        if (!wc) { res.status(500).json({ error: 'No active tab' }); return; }
+        const result = await humanizedClick(wc, selector);
         res.json(result);
       } catch (e: any) {
         res.status(500).json({ error: e.message });
       }
     });
 
-    // Type text into an element
+    // ═══════════════════════════════════════════════
+    // TYPE — via sendInputEvent char-by-char (Event.isTrusted = true)
+    // ═══════════════════════════════════════════════
+
     this.app.post('/type', async (req: Request, res: Response) => {
       const { selector, text, clear } = req.body;
       if (!selector || text === undefined) {
-        return res.status(400).json({ error: 'selector and text required' });
+        res.status(400).json({ error: 'selector and text required' });
+        return;
       }
-
       try {
-        const result = await this.win.webContents.executeJavaScript(`
-          new Promise((resolve) => {
-            const wv = document.querySelector('webview');
-            wv.executeJavaScript(\`
-              (() => {
-                const el = document.querySelector(${JSON.stringify(selector)});
-                if (!el) return { ok: false, error: 'Element not found' };
-                el.focus();
-                ${clear ? `el.value = '';` : ''}
-                el.value = ${JSON.stringify(text)};
-                el.dispatchEvent(new Event('input', { bubbles: true }));
-                el.dispatchEvent(new Event('change', { bubbles: true }));
-                return { ok: true };
-              })()
-            \`).then(resolve);
-          })
-        `);
+        const wc = await this.getActiveWC();
+        if (!wc) { res.status(500).json({ error: 'No active tab' }); return; }
+        const result = await humanizedType(wc, selector, text, !!clear);
         res.json(result);
       } catch (e: any) {
         res.status(500).json({ error: e.message });
       }
     });
 
-    // Execute arbitrary JavaScript
+    // ═══════════════════════════════════════════════
+    // EXECUTE JS
+    // ═══════════════════════════════════════════════
+
     this.app.post('/execute-js', async (req: Request, res: Response) => {
       const { code } = req.body;
-      if (!code) return res.status(400).json({ error: 'code required' });
-
+      if (!code) { res.status(400).json({ error: 'code required' }); return; }
       try {
-        const result = await this.win.webContents.executeJavaScript(`
-          new Promise((resolve) => {
-            const wv = document.querySelector('webview');
-            wv.executeJavaScript(${JSON.stringify(code)}).then(resolve);
-          })
-        `);
+        const result = await this.execInActiveTab(code);
         res.json({ ok: true, result });
       } catch (e: any) {
         res.status(500).json({ error: e.message });
       }
     });
 
-    // Screenshot
+    // ═══════════════════════════════════════════════
+    // SCREENSHOT — via capturePage (main process, not in webview)
+    // ═══════════════════════════════════════════════
+
     this.app.get('/screenshot', async (req: Request, res: Response) => {
       try {
-        const image = await this.win.webContents.capturePage();
+        const wc = await this.getActiveWC();
+        if (!wc) { res.status(500).json({ error: 'No active tab' }); return; }
+        const image = await wc.capturePage();
         const png = image.toPNG();
-        
+
         if (req.query.save) {
           const fs = require('fs');
           const filePath = req.query.save as string;
@@ -212,7 +187,10 @@ export class TandemAPI {
       }
     });
 
-    // Cookies management
+    // ═══════════════════════════════════════════════
+    // COOKIES
+    // ═══════════════════════════════════════════════
+
     this.app.get('/cookies', async (req: Request, res: Response) => {
       try {
         const url = req.query.url as string || '';
@@ -225,75 +203,82 @@ export class TandemAPI {
       }
     });
 
-    // Scroll
+    // ═══════════════════════════════════════════════
+    // SCROLL — via sendInputEvent (mouseWheel)
+    // ═══════════════════════════════════════════════
+
     this.app.post('/scroll', async (req: Request, res: Response) => {
       const { direction = 'down', amount = 500 } = req.body;
       try {
-        await this.win.webContents.executeJavaScript(`
-          document.querySelector('webview').executeJavaScript(
-            'window.scrollBy(0, ${direction === 'up' ? -amount : amount})'
-          )
-        `);
+        const wc = await this.getActiveWC();
+        if (!wc) { res.status(500).json({ error: 'No active tab' }); return; }
+        const deltaY = direction === 'up' ? -amount : amount;
+        wc.sendInputEvent({
+          type: 'mouseWheel',
+          x: 400,
+          y: 400,
+          deltaX: 0,
+          deltaY,
+        });
         res.json({ ok: true });
       } catch (e: any) {
         res.status(500).json({ error: e.message });
       }
     });
 
-    // Copilot alert — Kees asks Robin for help
+    // ═══════════════════════════════════════════════
+    // COPILOT ALERT
+    // ═══════════════════════════════════════════════
+
     this.app.post('/copilot-alert', (req: Request, res: Response) => {
       const { title = 'Hulp nodig', body = '' } = req.body;
       copilotAlert(title, body);
       res.json({ ok: true, sent: true });
     });
 
-    // Wait for page load
+    // ═══════════════════════════════════════════════
+    // WAIT
+    // ═══════════════════════════════════════════════
+
     this.app.post('/wait', async (req: Request, res: Response) => {
       const { selector, timeout = 10000 } = req.body;
       try {
-        const result = await this.win.webContents.executeJavaScript(`
-          new Promise((resolve) => {
-            const wv = document.querySelector('webview');
-            const code = ${JSON.stringify(selector ? `
-              new Promise((res, rej) => {
-                const check = () => {
-                  const el = document.querySelector('${selector}');
-                  if (el) return res({ ok: true, found: true });
-                  setTimeout(check, 200);
-                };
-                check();
-                setTimeout(() => res({ ok: true, found: false, timeout: true }), ${timeout});
-              })
-            ` : `
-              new Promise(res => {
-                if (document.readyState === 'complete') return res({ ok: true, ready: true });
-                window.addEventListener('load', () => res({ ok: true, ready: true }));
-                setTimeout(() => res({ ok: true, ready: false, timeout: true }), ${timeout});
-              })
-            `)};
-            wv.executeJavaScript(code).then(resolve);
+        const code = selector ? `
+          new Promise((res, rej) => {
+            const check = () => {
+              const el = document.querySelector('${selector}');
+              if (el) return res({ ok: true, found: true });
+              setTimeout(check, 200);
+            };
+            check();
+            setTimeout(() => res({ ok: true, found: false, timeout: true }), ${timeout});
           })
-        `);
+        ` : `
+          new Promise(res => {
+            if (document.readyState === 'complete') return res({ ok: true, ready: true });
+            window.addEventListener('load', () => res({ ok: true, ready: true }));
+            setTimeout(() => res({ ok: true, ready: false, timeout: true }), ${timeout});
+          })
+        `;
+        const result = await this.execInActiveTab(code);
         res.json(result);
       } catch (e: any) {
         res.status(500).json({ error: e.message });
       }
     });
 
-    // List all links on page
+    // ═══════════════════════════════════════════════
+    // LINKS
+    // ═══════════════════════════════════════════════
+
     this.app.get('/links', async (_req: Request, res: Response) => {
       try {
-        const links = await this.win.webContents.executeJavaScript(`
-          new Promise((resolve) => {
-            const wv = document.querySelector('webview');
-            wv.executeJavaScript(\`
-              Array.from(document.querySelectorAll('a[href]')).map(a => ({
-                text: a.textContent?.trim().substring(0, 100),
-                href: a.href,
-                visible: a.offsetParent !== null
-              })).filter(l => l.href && !l.href.startsWith('javascript:'))
-            \`).then(resolve);
-          })
+        const links = await this.execInActiveTab(`
+          Array.from(document.querySelectorAll('a[href]')).map(a => ({
+            text: a.textContent?.trim().substring(0, 100),
+            href: a.href,
+            visible: a.offsetParent !== null
+          })).filter(l => l.href && !l.href.startsWith('javascript:'))
         `);
         res.json({ links });
       } catch (e: any) {
@@ -301,30 +286,93 @@ export class TandemAPI {
       }
     });
 
-    // List all forms on page
+    // ═══════════════════════════════════════════════
+    // FORMS
+    // ═══════════════════════════════════════════════
+
     this.app.get('/forms', async (_req: Request, res: Response) => {
       try {
-        const forms = await this.win.webContents.executeJavaScript(`
-          new Promise((resolve) => {
-            const wv = document.querySelector('webview');
-            wv.executeJavaScript(\`
-              Array.from(document.querySelectorAll('form')).map((form, i) => ({
-                index: i,
-                action: form.action,
-                method: form.method,
-                fields: Array.from(form.querySelectorAll('input, textarea, select')).map(f => ({
-                  tag: f.tagName.toLowerCase(),
-                  type: f.type || '',
-                  name: f.name || '',
-                  id: f.id || '',
-                  placeholder: f.placeholder || '',
-                  value: f.value || ''
-                }))
-              }))
-            \`).then(resolve);
-          })
+        const forms = await this.execInActiveTab(`
+          Array.from(document.querySelectorAll('form')).map((form, i) => ({
+            index: i,
+            action: form.action,
+            method: form.method,
+            fields: Array.from(form.querySelectorAll('input, textarea, select')).map(f => ({
+              tag: f.tagName.toLowerCase(),
+              type: f.type || '',
+              name: f.name || '',
+              id: f.id || '',
+              placeholder: f.placeholder || '',
+              value: f.value || ''
+            }))
+          }))
         `);
         res.json({ forms });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
+      }
+    });
+
+    // ═══════════════════════════════════════════════
+    // TAB MANAGEMENT
+    // ═══════════════════════════════════════════════
+
+    /** Open a new tab */
+    this.app.post('/tabs/open', async (req: Request, res: Response) => {
+      const { url = 'about:blank', groupId } = req.body;
+      try {
+        const tab = await this.tabManager.openTab(url, groupId);
+        res.json({ ok: true, tab });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
+      }
+    });
+
+    /** Close a tab */
+    this.app.post('/tabs/close', async (req: Request, res: Response) => {
+      const { tabId } = req.body;
+      if (!tabId) { res.status(400).json({ error: 'tabId required' }); return; }
+      try {
+        const closed = await this.tabManager.closeTab(tabId);
+        res.json({ ok: closed });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
+      }
+    });
+
+    /** List all tabs */
+    this.app.get('/tabs/list', async (_req: Request, res: Response) => {
+      try {
+        const tabs = this.tabManager.listTabs();
+        const groups = this.tabManager.listGroups();
+        res.json({ tabs, groups });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
+      }
+    });
+
+    /** Focus a tab */
+    this.app.post('/tabs/focus', async (req: Request, res: Response) => {
+      const { tabId } = req.body;
+      if (!tabId) { res.status(400).json({ error: 'tabId required' }); return; }
+      try {
+        const focused = await this.tabManager.focusTab(tabId);
+        res.json({ ok: focused });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
+      }
+    });
+
+    /** Group tabs */
+    this.app.post('/tabs/group', async (req: Request, res: Response) => {
+      const { groupId, name, color = '#4285f4', tabIds } = req.body;
+      if (!groupId || !name || !tabIds) {
+        res.status(400).json({ error: 'groupId, name, and tabIds required' });
+        return;
+      }
+      try {
+        const group = this.tabManager.setGroup(groupId, name, color, tabIds);
+        res.json({ ok: true, group });
       } catch (e: any) {
         res.status(500).json({ error: e.message });
       }
