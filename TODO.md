@@ -76,7 +76,32 @@
 - [ ] Combi: annotated screenshot + voice/tekst = één bericht naar Kees
 - [ ] Notificatie als Kees antwoordt terwijl paneel dicht is
 
-### 2.7 Custom New Tab — Kees.ai 🧀
+### 2.7 Screenshot Pipeline 📸
+- [ ] Fix: Snap voor Kees knop moet daadwerkelijk composiet screenshot maken
+- [ ] Screenshot → clipboard (Cmd+V in elke app)
+- [ ] Screenshot → bestand opslaan (instelbare folder, default ~/Pictures/Tandem/)
+- [ ] Screenshot → Apple Photos library (via `osascript` / Photos framework)
+- [ ] Screenshot → Google Photos (via API, instelbaar)
+- [ ] Configuratiescherm: aan/uit per bestemming
+  - [ ] ☑️ Clipboard (altijd aan)
+  - [ ] ☑️ Lokale folder: [pad kiezen]
+  - [ ] ☑️ Apple Photos
+  - [ ] ☑️ Google Photos
+- [ ] Preview in Kees paneel (Screenshots tab)
+- [ ] Bestandsnaam: `tandem-{url-slug}-{timestamp}.png`
+
+### 2.8 Settings/Config Scherm ⚙️
+- [ ] Instellingen pagina (tandem://settings)
+- [ ] Screenshot bestemmingen configureren
+- [ ] Startpagina kiezen
+- [ ] Stealth level (low/medium/high)
+- [ ] Kees paneel positie (links/rechts)
+- [ ] Voice input taal (nl-BE, en-US, etc.)
+- [ ] Behavioral learning aan/uit
+- [ ] Data export/import
+- [ ] Opslag in ~/.tandem/config.json
+
+### 2.9 Custom New Tab — Kees.ai 🧀
 - [ ] Custom new-tab page in plaats van DuckDuckGo
 - [ ] Kees chat direct in new-tab (geen externe AI nodig)
 - [ ] Snelle acties: "zoek...", "open...", "wat staat er op mijn agenda?"
