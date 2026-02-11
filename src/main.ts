@@ -80,8 +80,69 @@ async function createWindow(): Promise<BrowserWindow> {
       contents.on('dom-ready', () => {
         contents.executeJavaScript(stealthScript).catch((e) => console.warn('Stealth script injection failed:', e.message));
       });
+
+      // Intercept Google login — open in native BrowserWindow (not webview)
+      // Google blocks sign-in from embedded browsers (webview), but allows BrowserWindow
+      contents.on('will-navigate', (event, url) => {
+        if (url.includes('accounts.google.com/signin') || 
+            url.includes('accounts.google.com/o/oauth2') ||
+            url.includes('accounts.google.com/v3/signin') ||
+            url.includes('accounts.google.com/ServiceLogin') ||
+            url.includes('accounts.google.com/AccountChooser')) {
+          event.preventDefault();
+          openGoogleLoginPopup(url, contents);
+        }
+      });
+
+      // Also catch redirects to Google login
+      contents.on('will-redirect', (event, url) => {
+        if (url.includes('accounts.google.com/signin') || 
+            url.includes('accounts.google.com/o/oauth2') ||
+            url.includes('accounts.google.com/v3/signin') ||
+            url.includes('accounts.google.com/ServiceLogin') ||
+            url.includes('accounts.google.com/AccountChooser')) {
+          event.preventDefault();
+          openGoogleLoginPopup(url, contents);
+        }
+      });
     }
   });
+
+  // Google Login Popup — opens in a real BrowserWindow (not webview) to bypass Google's block
+  function openGoogleLoginPopup(url: string, sourceContents: Electron.WebContents): void {
+    const loginWin = new BrowserWindow({
+      width: 500,
+      height: 700,
+      title: 'Sign in — Google',
+      parent: mainWindow!,
+      modal: true,
+      webPreferences: {
+        partition,  // Same partition = shares cookies with webviews
+        contextIsolation: true,
+        nodeIntegration: false,
+      },
+    });
+
+    loginWin.loadURL(url);
+
+    // When user finishes login and gets redirected away from accounts.google.com
+    loginWin.webContents.on('will-navigate', (_event, newUrl) => {
+      if (!newUrl.includes('accounts.google.com')) {
+        // Login complete — close popup, reload the original page
+        loginWin.close();
+        sourceContents.reload();
+      }
+    });
+
+    loginWin.webContents.on('will-redirect', (_event, newUrl) => {
+      if (!newUrl.includes('accounts.google.com') && 
+          !newUrl.includes('consent.google.com') &&
+          !newUrl.includes('myaccount.google.com')) {
+        loginWin.close();
+        sourceContents.reload();
+      }
+    });
+  }
 
   mainWindow = new BrowserWindow({
     width: 1400,
