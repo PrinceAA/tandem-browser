@@ -32,6 +32,16 @@ export class StealthManager {
     // Modify headers to look natural
     this.session.webRequest.onBeforeSendHeaders((details, callback) => {
       const headers = { ...details.requestHeaders };
+
+      // Skip ALL header manipulation for Google auth — our overrides break their login detection
+      // TotalRecall V2 has zero stealth and Google works fine there
+      const url = details.url || '';
+      if (url.includes('accounts.google.com') || url.includes('google.com/signin') || 
+          url.includes('googleapis.com') || url.includes('gstatic.com') ||
+          url.includes('consent.google.com')) {
+        callback({ requestHeaders: headers });
+        return;
+      }
       
       // Remove Electron/automation giveaways
       delete headers['X-Electron'];
