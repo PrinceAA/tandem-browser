@@ -98,16 +98,22 @@
 - [x] Preview in Kees paneel (Screenshots tab) — base64 preview
 - [x] Bestandsnaam: `tandem-{url-slug}-{timestamp}.png`
 
-### 2.8 Settings/Config Scherm ⚙️
-- [ ] Instellingen pagina (tandem://settings)
-- [ ] Screenshot bestemmingen configureren
-- [ ] Startpagina kiezen
-- [ ] Stealth level (low/medium/high)
-- [ ] Kees paneel positie (links/rechts)
-- [ ] Voice input taal (nl-BE, en-US, etc.)
-- [ ] Behavioral learning aan/uit
-- [ ] Data export/import
-- [ ] Opslag in ~/.tandem/config.json
+### 2.8 Settings/Config Scherm ⚙️ ✅ DONE
+- [x] Instellingen pagina (tandem://settings)
+- [x] Screenshot bestemmingen configureren
+- [x] Startpagina kiezen
+- [x] Stealth level (low/medium/high)
+- [x] Kees paneel positie (links/rechts)
+- [x] Voice input taal (nl-BE, en-US, etc.)
+- [x] Behavioral learning aan/uit
+- [x] Data export/import
+- [x] Opslag in ~/.tandem/config.json
+- [x] ConfigManager class (src/config/manager.ts)
+- [x] API: GET /config, PATCH /config (partial update)
+- [x] Cmd+, shortcut voor instellingen
+- [x] Kees badge rechts-klik → instellingen
+- [x] Behavioral data wissen + statistieken
+- [x] Data export/import/wipe met bevestiging
 
 ### 2.9 Custom New Tab — Kees.ai 🧀 ✅ DONE
 - [x] Custom new-tab page (shell/newtab.html) in plaats van DuckDuckGo

@@ -2,6 +2,20 @@
 
 ## [Unreleased] — 2026-02-11
 
+### ⚙️ Phase 2.8 — Settings/Config Scherm
+- New `ConfigManager` class (`src/config/manager.ts`) — manages `~/.tandem/config.json`
+- Settings page (`shell/settings.html`) with dark theme matching Tandem
+- 6 settings sections: Algemeen, Screenshots, Voice, Stealth, Behavioral Learning, Data
+- API endpoints: `GET /config`, `PATCH /config` (partial update, deep merge)
+- API endpoints: `POST /behavior/clear`, `GET /data/export`, `POST /data/import`, `POST /data/wipe`
+- Navigate to settings via `tandem://settings` in URL bar
+- Keyboard shortcut: `Cmd+,` opens settings (macOS standard)
+- Kees badge: right-click or long-press opens settings
+- Live save on every change — no restart needed
+- Confirmation modal for destructive actions (wipe data, clear behavior)
+- Behavior stats displayed with auto-refresh (events today, session, avg keypress/click timing)
+- Sticky navigation sidebar with scroll-aware highlighting
+
 ### 📸 Phase 2.7 — Screenshot Pipeline Voltooien
 - Screenshot thumbnails in Kees paneel zijn nu clickable (opent full-size viewer in popup)
 - Cmd+Shift+S quick screenshot werkt zonder draw mode (verified)
