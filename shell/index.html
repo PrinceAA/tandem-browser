@@ -16,6 +16,9 @@
       --input-bg: #0f3460;
       --success: #4ecca3;
       --warning: #f0a500;
+      --tab-bg: #111a30;
+      --tab-active: #16213e;
+      --tab-hover: #1a2744;
     }
 
     body {
@@ -28,19 +31,110 @@
       overflow: hidden;
     }
 
-    /* Top bar */
+    /* ═══ Tab bar ═══ */
+    .tab-bar {
+      display: flex;
+      align-items: center;
+      background: var(--tab-bg);
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+      height: 38px;
+      -webkit-app-region: drag;
+      padding-left: 80px; /* macOS traffic lights */
+      overflow-x: auto;
+      overflow-y: hidden;
+    }
+    .tab-bar::-webkit-scrollbar { height: 0; }
+
+    .tab {
+      -webkit-app-region: no-drag;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 12px;
+      height: 100%;
+      min-width: 120px;
+      max-width: 220px;
+      background: transparent;
+      border: none;
+      color: var(--text-dim);
+      font-size: 12px;
+      cursor: pointer;
+      border-right: 1px solid rgba(255,255,255,0.04);
+      position: relative;
+      transition: background 0.15s, color 0.15s;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+    .tab:hover { background: var(--tab-hover); color: var(--text); }
+    .tab.active {
+      background: var(--tab-active);
+      color: var(--text);
+      border-bottom: 2px solid var(--accent);
+    }
+
+    .tab .group-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .tab .tab-favicon {
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+      border-radius: 2px;
+    }
+
+    .tab .tab-title {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .tab .tab-close {
+      opacity: 0;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      font-size: 11px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: opacity 0.15s, background 0.15s;
+    }
+    .tab:hover .tab-close { opacity: 1; }
+    .tab .tab-close:hover { background: rgba(233,69,96,0.3); color: var(--accent); }
+
+    .tab-new-btn {
+      -webkit-app-region: no-drag;
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      font-size: 18px;
+      cursor: pointer;
+      padding: 0 10px;
+      height: 100%;
+      transition: color 0.15s;
+    }
+    .tab-new-btn:hover { color: var(--text); }
+
+    /* ═══ Toolbar ═══ */
     .toolbar {
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 8px 12px;
+      padding: 6px 12px;
       background: var(--surface);
       border-bottom: 1px solid rgba(255,255,255,0.05);
-      -webkit-app-region: drag;
     }
 
     .toolbar button {
-      -webkit-app-region: no-drag;
       background: none;
       border: none;
       color: var(--text-dim);
@@ -53,14 +147,13 @@
     .toolbar button:hover { color: var(--text); background: rgba(255,255,255,0.1); }
 
     .url-bar {
-      -webkit-app-region: no-drag;
       flex: 1;
       background: var(--input-bg);
       border: 1px solid rgba(255,255,255,0.1);
       border-radius: 20px;
-      padding: 8px 16px;
+      padding: 7px 16px;
       color: var(--text);
-      font-size: 14px;
+      font-size: 13px;
       outline: none;
       transition: border-color 0.2s;
     }
@@ -71,7 +164,6 @@
       height: 10px;
       border-radius: 50%;
       background: var(--success);
-      -webkit-app-region: no-drag;
       transition: background 0.3s;
     }
     .status-dot.loading { background: var(--warning); animation: pulse 1s infinite; }
@@ -83,9 +175,8 @@
     }
 
     .kees-badge {
-      -webkit-app-region: no-drag;
-      font-size: 12px;
-      padding: 4px 10px;
+      font-size: 11px;
+      padding: 3px 8px;
       background: rgba(233, 69, 96, 0.2);
       border: 1px solid var(--accent);
       border-radius: 12px;
@@ -93,19 +184,25 @@
       cursor: default;
     }
 
-    /* Browser content */
+    /* ═══ Browser content ═══ */
     .browser-content {
       flex: 1;
       position: relative;
     }
 
-    webview {
+    .browser-content webview {
+      position: absolute;
+      top: 0; left: 0;
       width: 100%;
       height: 100%;
       border: none;
+      display: none;
+    }
+    .browser-content webview.active {
+      display: flex;
     }
 
-    /* Copilot alert overlay */
+    /* ═══ Copilot overlay ═══ */
     .copilot-overlay {
       display: none;
       position: fixed;
@@ -141,19 +238,27 @@
   </style>
 </head>
 <body>
+
+  <!-- Tab bar -->
+  <div class="tab-bar" id="tab-bar">
+    <button class="tab-new-btn" id="btn-new-tab" title="Nieuwe tab (Cmd+T)">+</button>
+  </div>
+
+  <!-- Navigation toolbar -->
   <div class="toolbar">
     <button id="btn-back" title="Terug">←</button>
     <button id="btn-forward" title="Vooruit">→</button>
     <button id="btn-reload" title="Herladen">⟳</button>
-    <input class="url-bar" id="url-bar" type="text" placeholder="Voer URL in..." value="https://duckduckgo.com">
+    <input class="url-bar" id="url-bar" type="text" placeholder="Voer URL in of zoek..." value="">
     <div class="status-dot" id="status-dot" title="Verbonden met Kees API"></div>
-    <span class="kees-badge">🧀 Kees Online</span>
+    <span class="kees-badge">🧀 Kees</span>
   </div>
 
-  <div class="browser-content">
-    <webview id="browser" src="https://duckduckgo.com" allowpopups></webview>
+  <!-- Webview container -->
+  <div class="browser-content" id="webview-container">
   </div>
 
+  <!-- Copilot alert overlay -->
   <div class="copilot-overlay" id="copilot-overlay">
     <button class="dismiss" onclick="dismissAlert()">✕</button>
     <h3 id="alert-title">🧀 Kees heeft je nodig</h3>
@@ -161,63 +266,304 @@
   </div>
 
   <script>
-    const browser = document.getElementById('browser');
+    // ═══════════════════════════════════════════════
+    // Tab management system (renderer side)
+    // ═══════════════════════════════════════════════
+
+    const tabBar = document.getElementById('tab-bar');
+    const btnNewTab = document.getElementById('btn-new-tab');
     const urlBar = document.getElementById('url-bar');
     const statusDot = document.getElementById('status-dot');
+    const container = document.getElementById('webview-container');
     const overlay = document.getElementById('copilot-overlay');
 
-    // Navigation
-    document.getElementById('btn-back').onclick = () => browser.goBack();
-    document.getElementById('btn-forward').onclick = () => browser.goForward();
-    document.getElementById('btn-reload').onclick = () => browser.reload();
+    /** Map of tabId → { webview, tabEl } */
+    const tabs = new Map();
+    let activeTabId = null;
+
+    /**
+     * Exposed to main process via window.__tandemTabs
+     * TabManager calls these via executeJavaScript
+     */
+    window.__tandemTabs = {
+      /** Create a new webview, return its webContentsId */
+      createTab(tabId, url) {
+        const wv = document.createElement('webview');
+        wv.setAttribute('src', url);
+        wv.setAttribute('allowpopups', '');
+        wv.setAttribute('partition', 'persist:tandem');
+        wv.dataset.tabId = tabId;
+        container.appendChild(wv);
+
+        // Create tab bar element
+        const tabEl = document.createElement('div');
+        tabEl.className = 'tab';
+        tabEl.dataset.tabId = tabId;
+        tabEl.innerHTML = `
+          <span class="group-dot" style="display:none"></span>
+          <img class="tab-favicon" src="" style="display:none">
+          <span class="tab-title">New Tab</span>
+          <button class="tab-close" title="Sluit tab">✕</button>
+        `;
+
+        // Click to focus
+        tabEl.addEventListener('click', (e) => {
+          if (e.target.classList.contains('tab-close')) return;
+          if (window.tandem) window.tandem.focusTab(tabId);
+        });
+
+        // Close button
+        tabEl.querySelector('.tab-close').addEventListener('click', () => {
+          if (window.tandem) window.tandem.closeTab(tabId);
+        });
+
+        // Insert before the + button
+        tabBar.insertBefore(tabEl, btnNewTab);
+
+        tabs.set(tabId, { webview: wv, tabEl });
+
+        // Wire up webview events
+        wv.addEventListener('did-navigate', (e) => updateTabMeta(tabId, { url: e.url }));
+        wv.addEventListener('did-navigate-in-page', (e) => {
+          if (e.isMainFrame) updateTabMeta(tabId, { url: e.url });
+        });
+        wv.addEventListener('page-title-updated', (e) => updateTabMeta(tabId, { title: e.title }));
+        wv.addEventListener('page-favicon-updated', (e) => {
+          if (e.favicons && e.favicons.length > 0) {
+            updateTabMeta(tabId, { favicon: e.favicons[0] });
+          }
+        });
+        wv.addEventListener('did-start-loading', () => {
+          if (tabId === activeTabId) statusDot.classList.add('loading');
+        });
+        wv.addEventListener('did-stop-loading', () => {
+          if (tabId === activeTabId) statusDot.classList.remove('loading');
+        });
+
+        // Return webContentsId (available after dom-ready)
+        return new Promise((resolve) => {
+          wv.addEventListener('dom-ready', () => {
+            resolve(wv.getWebContentsId());
+          }, { once: true });
+        });
+      },
+
+      /** Remove a tab */
+      removeTab(tabId) {
+        const entry = tabs.get(tabId);
+        if (!entry) return;
+        entry.webview.remove();
+        entry.tabEl.remove();
+        tabs.delete(tabId);
+      },
+
+      /** Focus/show a tab */
+      focusTab(tabId) {
+        // Hide all webviews, show the target
+        for (const [id, entry] of tabs) {
+          if (id === tabId) {
+            entry.webview.classList.add('active');
+            entry.tabEl.classList.add('active');
+          } else {
+            entry.webview.classList.remove('active');
+            entry.tabEl.classList.remove('active');
+          }
+        }
+        activeTabId = tabId;
+        // Update URL bar
+        const entry = tabs.get(tabId);
+        if (entry) {
+          try {
+            const url = entry.webview.getURL();
+            urlBar.value = url || '';
+          } catch (_) {}
+        }
+      },
+    };
+
+    /** Update tab metadata in both UI and main process */
+    function updateTabMeta(tabId, data) {
+      const entry = tabs.get(tabId);
+      if (!entry) return;
+
+      if (data.title) {
+        entry.tabEl.querySelector('.tab-title').textContent = data.title;
+        if (tabId === activeTabId) document.title = `${data.title} — Tandem`;
+      }
+      if (data.url && tabId === activeTabId) {
+        urlBar.value = data.url;
+      }
+      if (data.favicon) {
+        const img = entry.tabEl.querySelector('.tab-favicon');
+        img.src = data.favicon;
+        img.style.display = '';
+      }
+
+      // Notify main process
+      if (window.tandem) {
+        window.tandem.sendTabUpdate({ tabId, ...data });
+      }
+    }
+
+    // ═══════════════════════════════════════════════
+    // Initial tab — create on load
+    // ═══════════════════════════════════════════════
+
+    (async () => {
+      // The initial tab is created by the renderer, then registered with main
+      const initialUrl = 'https://duckduckgo.com';
+      const wv = document.createElement('webview');
+      wv.setAttribute('src', initialUrl);
+      wv.setAttribute('allowpopups', '');
+      wv.setAttribute('partition', 'persist:tandem');
+      wv.dataset.tabId = '__initial';
+      container.appendChild(wv);
+
+      const tabEl = document.createElement('div');
+      tabEl.className = 'tab active';
+      tabEl.dataset.tabId = '__initial';
+      tabEl.innerHTML = `
+        <span class="group-dot" style="display:none"></span>
+        <img class="tab-favicon" src="" style="display:none">
+        <span class="tab-title">DuckDuckGo</span>
+        <button class="tab-close" title="Sluit tab">✕</button>
+      `;
+      tabBar.insertBefore(tabEl, btnNewTab);
+
+      wv.classList.add('active');
+      activeTabId = '__initial';
+      urlBar.value = initialUrl;
+
+      tabs.set('__initial', { webview: wv, tabEl });
+
+      // Wire up events
+      wv.addEventListener('did-navigate', (e) => updateTabMeta('__initial', { url: e.url }));
+      wv.addEventListener('did-navigate-in-page', (e) => {
+        if (e.isMainFrame) updateTabMeta('__initial', { url: e.url });
+      });
+      wv.addEventListener('page-title-updated', (e) => updateTabMeta('__initial', { title: e.title }));
+      wv.addEventListener('page-favicon-updated', (e) => {
+        if (e.favicons && e.favicons.length > 0) updateTabMeta('__initial', { favicon: e.favicons[0] });
+      });
+      wv.addEventListener('did-start-loading', () => statusDot.classList.add('loading'));
+      wv.addEventListener('did-stop-loading', () => statusDot.classList.remove('loading'));
+
+      // Register with main process once ready
+      wv.addEventListener('dom-ready', () => {
+        const wcId = wv.getWebContentsId();
+        if (window.tandem) {
+          window.tandem.registerTab(wcId, initialUrl);
+        }
+      }, { once: true });
+
+      // Handle the rename once main assigns a real tabId
+      if (window.tandem) {
+        window.tandem.onTabRegistered((data) => {
+          const entry = tabs.get('__initial');
+          if (entry) {
+            tabs.delete('__initial');
+            entry.webview.dataset.tabId = data.tabId;
+            entry.tabEl.dataset.tabId = data.tabId;
+
+            // Rewire click handlers
+            entry.tabEl.onclick = null;
+            entry.tabEl.addEventListener('click', (e) => {
+              if (e.target.classList.contains('tab-close')) return;
+              if (window.tandem) window.tandem.focusTab(data.tabId);
+            });
+            entry.tabEl.querySelector('.tab-close').addEventListener('click', () => {
+              if (window.tandem) window.tandem.closeTab(data.tabId);
+            });
+
+            tabs.set(data.tabId, entry);
+            activeTabId = data.tabId;
+
+            // Re-register event listeners with new tabId
+            entry.webview.addEventListener('did-navigate', (e) => updateTabMeta(data.tabId, { url: e.url }));
+            entry.webview.addEventListener('page-title-updated', (e) => updateTabMeta(data.tabId, { title: e.title }));
+            entry.webview.addEventListener('page-favicon-updated', (e) => {
+              if (e.favicons && e.favicons.length > 0) updateTabMeta(data.tabId, { favicon: e.favicons[0] });
+            });
+          }
+        });
+      }
+
+      // Tab close handler for initial tab
+      tabEl.querySelector('.tab-close').addEventListener('click', () => {
+        if (window.tandem && activeTabId) window.tandem.closeTab(activeTabId);
+      });
+      tabEl.addEventListener('click', (e) => {
+        if (e.target.classList.contains('tab-close')) return;
+        if (window.tandem && activeTabId) window.tandem.focusTab(activeTabId);
+      });
+    })();
+
+    // ═══════════════════════════════════════════════
+    // Navigation toolbar
+    // ═══════════════════════════════════════════════
+
+    document.getElementById('btn-back').onclick = () => {
+      const entry = tabs.get(activeTabId);
+      if (entry) entry.webview.goBack();
+    };
+    document.getElementById('btn-forward').onclick = () => {
+      const entry = tabs.get(activeTabId);
+      if (entry) entry.webview.goForward();
+    };
+    document.getElementById('btn-reload').onclick = () => {
+      const entry = tabs.get(activeTabId);
+      if (entry) entry.webview.reload();
+    };
 
     urlBar.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         let url = urlBar.value.trim();
         if (!url.startsWith('http://') && !url.startsWith('https://')) {
-          // Search or add protocol
           if (url.includes('.') && !url.includes(' ')) {
             url = 'https://' + url;
           } else {
             url = 'https://duckduckgo.com/?q=' + encodeURIComponent(url);
           }
         }
-        browser.loadURL(url);
+        const entry = tabs.get(activeTabId);
+        if (entry) entry.webview.loadURL(url);
       }
     });
 
-    // Track navigation
-    browser.addEventListener('did-navigate', (e) => {
-      urlBar.value = e.url;
-    });
-    browser.addEventListener('did-navigate-in-page', (e) => {
-      if (e.isMainFrame) urlBar.value = e.url;
+    // ═══════════════════════════════════════════════
+    // New tab button
+    // ═══════════════════════════════════════════════
+
+    btnNewTab.addEventListener('click', () => {
+      if (window.tandem) window.tandem.newTab();
     });
 
-    // Loading state
-    browser.addEventListener('did-start-loading', () => {
-      statusDot.classList.add('loading');
-    });
-    browser.addEventListener('did-stop-loading', () => {
-      statusDot.classList.remove('loading');
-    });
-    browser.addEventListener('did-fail-load', () => {
-      statusDot.classList.add('error');
-      setTimeout(() => statusDot.classList.remove('error'), 3000);
-    });
+    // ═══════════════════════════════════════════════
+    // Keyboard shortcuts (from main process)
+    // ═══════════════════════════════════════════════
 
-    // Inject stealth script on every page
-    browser.addEventListener('dom-ready', () => {
-      // Will be populated by StealthManager
-    });
+    if (window.tandem) {
+      window.tandem.onShortcut((action) => {
+        if (action === 'new-tab') {
+          window.tandem.newTab();
+        } else if (action === 'close-tab') {
+          if (activeTabId) window.tandem.closeTab(activeTabId);
+        } else if (action.startsWith('focus-tab-')) {
+          const index = parseInt(action.replace('focus-tab-', ''), 10);
+          window.tandem.focusTabByIndex(index);
+        }
+      });
+    }
 
-    // Copilot alerts from Kees
+    // ═══════════════════════════════════════════════
+    // Copilot alerts
+    // ═══════════════════════════════════════════════
+
     if (window.tandem) {
       window.tandem.onCopilotAlert((data) => {
         document.getElementById('alert-title').textContent = data.title;
         document.getElementById('alert-body').textContent = data.body;
         overlay.classList.add('visible');
-        // Auto-dismiss after 15 seconds
         setTimeout(dismissAlert, 15000);
       });
     }
