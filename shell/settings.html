@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tandem — Instellingen</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg: #1a1a2e;
+      --surface: #16213e;
+      --surface2: #1c2a4a;
+      --accent: #e94560;
+      --text: #eee;
+      --text-dim: #888;
+      --input-bg: #0f3460;
+      --success: #4ecca3;
+      --warning: #f0a500;
+      --border: rgba(255,255,255,0.08);
+      --danger: #e94560;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-y: auto;
+    }
+
+    .settings-header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 24px 40px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .settings-header h1 { font-size: 22px; font-weight: 600; }
+    .settings-header .logo { font-size: 28px; }
+    .settings-header .version { font-size: 12px; color: var(--text-dim); margin-left: auto; }
+
+    .settings-nav {
+      position: fixed;
+      left: 0;
+      top: 76px;
+      bottom: 0;
+      width: 200px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 16px 0;
+      overflow-y: auto;
+    }
+    .settings-nav a {
+      display: block;
+      padding: 10px 24px;
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 13px;
+      border-left: 3px solid transparent;
+      transition: all 0.15s;
+    }
+    .settings-nav a:hover { color: var(--text); background: rgba(255,255,255,0.03); }
+    .settings-nav a.active { color: var(--accent); border-left-color: var(--accent); background: rgba(233,69,96,0.08); }
+
+    .settings-body {
+      margin-left: 200px;
+      padding: 32px 40px 60px;
+      max-width: 720px;
+    }
+
+    .section { margin-bottom: 40px; }
+    .section h2 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .section .section-desc {
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-bottom: 16px;
+    }
+
+    .field {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 8px;
+      gap: 16px;
+    }
+    .field-info { flex: 1; }
+    .field-label { font-size: 13px; font-weight: 500; }
+    .field-desc { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+    select, input[type="text"], input[type="url"] {
+      background: var(--input-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 7px 12px;
+      color: var(--text);
+      font-size: 13px;
+      outline: none;
+      min-width: 180px;
+    }
+    select:focus, input[type="text"]:focus, input[type="url"]:focus {
+      border-color: var(--accent);
+    }
+
+    /* Toggle switch */
+    .toggle {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: #333;
+      border-radius: 24px;
+      transition: 0.2s;
+    }
+    .toggle .slider:before {
+      content: "";
+      position: absolute;
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background: white;
+      border-radius: 50%;
+      transition: 0.2s;
+    }
+    .toggle input:checked + .slider { background: var(--accent); }
+    .toggle input:checked + .slider:before { transform: translateX(20px); }
+    .toggle input:disabled + .slider { opacity: 0.4; cursor: not-allowed; }
+
+    /* Range slider */
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 120px;
+      height: 4px;
+      border-radius: 2px;
+      background: var(--input-bg);
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+    }
+
+    .range-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .range-value { font-size: 13px; color: var(--text); min-width: 24px; text-align: center; }
+
+    /* Buttons */
+    .btn {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { opacity: 0.85; }
+    .btn-danger { background: rgba(233,69,96,0.2); color: var(--danger); border: 1px solid var(--danger); }
+    .btn-danger:hover { background: rgba(233,69,96,0.35); }
+    .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { background: rgba(255,255,255,0.1); }
+
+    .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    /* Stats grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .stat-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+    }
+    .stat-card .stat-value { font-size: 22px; font-weight: 700; color: var(--accent); }
+    .stat-card .stat-label { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+
+    /* Tooltip */
+    .tooltip {
+      position: relative;
+      cursor: help;
+      border-bottom: 1px dotted var(--text-dim);
+    }
+    .tooltip:hover::after {
+      content: attr(data-tip);
+      position: absolute;
+      bottom: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #000;
+      color: var(--text);
+      font-size: 11px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      white-space: pre-line;
+      max-width: 260px;
+      z-index: 100;
+      pointer-events: none;
+    }
+
+    /* Toast notification */
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: var(--success);
+      color: #111;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: all 0.3s;
+      z-index: 1000;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+
+    /* Confirm modal */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      z-index: 500;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      max-width: 400px;
+      text-align: center;
+    }
+    .modal h3 { margin-bottom: 12px; }
+    .modal p { font-size: 13px; color: var(--text-dim); margin-bottom: 20px; }
+    .modal .btn-group { justify-content: center; }
+  </style>
+</head>
+<body>
+
+  <div class="settings-header">
+    <span class="logo">🧀</span>
+    <h1>Tandem Instellingen</h1>
+    <span class="version">v0.1.0</span>
+  </div>
+
+  <nav class="settings-nav" id="settings-nav">
+    <a href="#general" class="active" data-section="general">⚙️ Algemeen</a>
+    <a href="#screenshots" data-section="screenshots">📸 Screenshots</a>
+    <a href="#voice" data-section="voice">🎙️ Voice</a>
+    <a href="#stealth" data-section="stealth">🛡️ Stealth</a>
+    <a href="#behavior" data-section="behavior">🧬 Behavioral Learning</a>
+    <a href="#data" data-section="data">💾 Data</a>
+  </nav>
+
+  <div class="settings-body">
+
+    <!-- ═══ Algemeen ═══ -->
+    <div class="section" id="general">
+      <h2>⚙️ Algemeen</h2>
+      <p class="section-desc">Basisinstellingen voor Tandem Browser</p>
+
+      <div class="field">
+        <div class="field-info">
+          <div class="field-label">Startpagina</div>
+          <div class="field-desc">Welke pagina opent bij een nieuwe tab?</div>
+        </div>
+        <select id="cfg-startPage">
+          <option value="kees">Kees.ai (New Tab)</option>
+          <option value="duckduckgo">DuckDuckGo</option>
+          <option value="custom">Custom URL</option>
+        </select>
+      </div>
+
+      <div class="field" id="field-customStartUrl" style="display:none;">
+        <div class="field-info">
+          <div class="field-label">Custom start URL</div>
+        </div>
+        <input type="url" id="cfg-customStartUrl" placeholder="https://example.com" />
+      </div>
+
+      <div class="field">
+        <div class="field-info">
+          <div class="field-label">Taal</div>
+          <div class="field-desc">Interface- en zoektaal</div>
+        </div>
+        <select id="cfg-language">
+          <option value="nl-BE">Nederlands (België)</option>
+          <option value="nl-NL">Nederlands (Nederland)</option>
+          <option value="en-US">English (US)</option>
+          <option value="en-GB">English (UK)</option>
+          <option value="de-DE">Deutsch</option>
+          <option value="fr-FR">Français</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <div class="field-info">
+          <div class="field-label">Kees paneel positie</div>
+          <div class="field-desc">Aan welke kant verschijnt het Kees paneel?</div>
+        </div>
+        <select id="cfg-keesPanelPosition">
+          <option value="right">Rechts</option>
+          <option value="left">Links</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <div class="field-info">
+          <div class="field-label">Kees paneel standaard open</div>
+          <div class="field-desc">Paneel automatisch openen bij opstarten</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="cfg-keesPanelDefaultOpen">
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <!-- ═══ Screenshots ═══ -->
+    <div class="section" id="screenshots">
+      <h2>📸 Screenshots</h2>
+      <p class="section-desc">Waar worden screenshots opgeslagen?</p>
+
+      <div class="field">
+        <div class="field-info">
+          <div class="field-label">Naar clipboard</div>
+          <div class="field-desc">Altijd aan — elke screenshot gaat naar je klembord</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" checked disabled>
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="field">
+        <div class="field-info">
+          <div class="field-label">Lokale folder</div>
+          <div class="field-desc">Sla screenshots op als bestanden</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="cfg-localFolder">
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="field" id="field-localFolderPath">
+        <div class="field-info">
+          <div class="field-label">Opslagpad</div>
+        </div>
+        <input type="text" id="cfg-localFolderPath" placeholder="~/Pictures/Tandem/" />
+      </div>
+
+      <div class="field">
+        <div class="field-info">
+          <div class="field-label">Apple Photos</div>
+          <div class="field-desc">Binnenkort beschikbaar</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="cfg-applePhotos" disabled>
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="field">
+        <div class="field-info">
+          <div class="field-label">Google Photos</div>
+          <div class="field-desc">Binnenkort beschikbaar</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="cfg-googlePhotos" disabled>
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <!-- ═══ Voice ═══ -->
+    <div class="section" id="voice">
+      <h2>🎙️ Voice</h2>
+      <p class="section-desc">Spraakinvoer instellingen</p>
+
+      <div class="field">
+        <div class="field-info">
+          <div class="field-label">Input taal</div>
+          <div class="field-desc">Taal voor spraakherkenning</div>
+        </div>
+        <select id="cfg-voiceLanguage">
+          <option value="nl-BE">Nederlands (België)</option>
+          <option value="nl-NL">Nederlands (Nederland)</option>
+          <option value="en-US">English (US)</option>
+          <option value="en-GB">English (UK)</option>
+          <option value="de-DE">Deutsch</option>
+          <option value="fr-FR">Français</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <div class="field-info">
+          <div class="field-label">Auto-send na stilte</div>
+          <div class="field-desc">Stuur bericht automatisch na een pauze in het spreken</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="cfg-autoSendOnSilence">
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="field">
+        <div class="field-info">
+          <div class="field-label">Stilte timeout</div>
+          <div class="field-desc">Wacht zo lang na laatste woord voor auto-send</div>
+        </div>
+        <div class="range-wrap">
+          <input type="range" id="cfg-silenceTimeout" min="1" max="5" step="0.5" value="2">
+          <span class="range-value" id="silenceTimeoutVal">2s</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ Stealth ═══ -->
+    <div class="section" id="stealth">
+      <h2>🛡️ Stealth</h2>
+      <p class="section-desc">Anti-detectie instellingen — houd Tandem onzichtbaar</p>
+
+      <div class="field">
+        <div class="field-info">
+          <div class="field-label">User-Agent</div>
+          <div class="field-desc">Auto matcht de nieuwste Chrome versie</div>
+        </div>
+        <select id="cfg-userAgent">
+          <option value="auto">Auto (match Chrome)</option>
+          <option value="custom">Custom</option>
+        </select>
+      </div>
+
+      <div class="field" id="field-customUserAgent" style="display:none;">
+        <div class="field-info">
+          <div class="field-label">Custom User-Agent</div>
+        </div>
+        <input type="text" id="cfg-customUserAgent" placeholder="Mozilla/5.0 ..." />
+      </div>
+
+      <div class="field">
+        <div class="field-info">
+          <div class="field-label">Stealth Level</div>
+          <div class="field-desc">
+            <span class="tooltip" data-tip="Low: Basis UA + header patches&#10;Medium: + navigator/chrome mocks, fingerprint patches&#10;High: + canvas/WebGL randomisatie, timing humanisatie">Hover voor uitleg per level</span>
+          </div>
+        </div>
+        <select id="cfg-stealthLevel">
+          <option value="low">Low</option>
+          <option value="medium">Medium</option>
+          <option value="high">High</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <div class="field-info">
+          <div class="field-label">Accept-Language</div>
+          <div class="field-desc">Auto volgt je taalinstelling</div>
+        </div>
+        <select id="cfg-acceptLanguage">
+          <option value="auto">Auto</option>
+          <option value="custom">Custom</option>
+        </select>
+      </div>
+
+      <div class="field" id="field-customAcceptLanguage" style="display:none;">
+        <div class="field-info">
+          <div class="field-label">Custom Accept-Language</div>
+        </div>
+        <input type="text" id="cfg-customAcceptLanguage" placeholder="nl-BE,nl;q=0.9,en-US;q=0.8" />
+      </div>
+    </div>
+
+    <!-- ═══ Behavioral Learning ═══ -->
+    <div class="section" id="behavior">
+      <h2>🧬 Behavioral Learning</h2>
+      <p class="section-desc">Tandem leert je browspatronen voor natuurlijke automatisering</p>
+
+      <div class="field">
+        <div class="field-info">
+          <div class="field-label">Tracking aan</div>
+          <div class="field-desc">Registreer muis, scroll, toetsenbord en navigatiepatronen</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="cfg-trackingEnabled">
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="field">
+        <div class="field-info">
+          <div class="field-label">Behavioral data wissen</div>
+          <div class="field-desc">Verwijder alle opgeslagen gedragsdata</div>
+        </div>
+        <button class="btn btn-danger" id="btn-clearBehavior">Data wissen</button>
+      </div>
+
+      <h3 style="font-size:14px;margin:16px 0 8px;">📊 Statistieken</h3>
+      <div class="stats-grid" id="behavior-stats">
+        <div class="stat-card"><div class="stat-value" id="stat-todayEvents">—</div><div class="stat-label">Events vandaag</div></div>
+        <div class="stat-card"><div class="stat-value" id="stat-totalFiles">—</div><div class="stat-label">Dagen gelogd</div></div>
+        <div class="stat-card"><div class="stat-value" id="stat-sessionEvents">—</div><div class="stat-label">Sessie events</div></div>
+        <div class="stat-card"><div class="stat-value" id="stat-avgKeypress">—</div><div class="stat-label">Gem. keypress (ms)</div></div>
+        <div class="stat-card"><div class="stat-value" id="stat-avgClick">—</div><div class="stat-label">Gem. click delay (ms)</div></div>
+      </div>
+    </div>
+
+    <!-- ═══ Data ═══ -->
+    <div class="section" id="data">
+      <h2>💾 Data</h2>
+      <p class="section-desc">Exporteer, importeer of wis al je Tandem data</p>
+
+      <div class="field">
+        <div class="field-info">
+          <div class="field-label">Exporteer alle data</div>
+          <div class="field-desc">Bookmarks, history, chat, behavioral data — als JSON</div>
+        </div>
+        <button class="btn btn-secondary" id="btn-export">📦 Exporteer</button>
+      </div>
+
+      <div class="field">
+        <div class="field-info">
+          <div class="field-label">Importeer data</div>
+          <div class="field-desc">Herstel een eerder geëxporteerde Tandem backup</div>
+        </div>
+        <button class="btn btn-secondary" id="btn-import">📥 Importeer</button>
+        <input type="file" id="import-file" accept=".json" style="display:none" />
+      </div>
+
+      <div class="field">
+        <div class="field-info">
+          <div class="field-label">Wis alle data</div>
+          <div class="field-desc">⚠️ Dit verwijdert ALLES — chat, config, behavioral data</div>
+        </div>
+        <button class="btn btn-danger" id="btn-wipe">🗑 Alles wissen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast">Opgeslagen ✓</div>
+
+  <!-- Confirm modal -->
+  <div class="modal-overlay" id="modal-overlay">
+    <div class="modal">
+      <h3 id="modal-title">Weet je het zeker?</h3>
+      <p id="modal-text">Dit kan niet ongedaan worden.</p>
+      <div class="btn-group">
+        <button class="btn btn-secondary" id="modal-cancel">Annuleren</button>
+        <button class="btn btn-danger" id="modal-confirm">Bevestigen</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API = 'http://localhost:8765';
+
+    // ═══ Load config ═══
+    let config = {};
+
+    async function loadConfig() {
+      try {
+        const res = await fetch(`${API}/config`);
+        if (res.ok) config = await res.json();
+      } catch { /* API not ready */ }
+      applyConfigToUI();
+    }
+
+    function applyConfigToUI() {
+      const g = config.general || {};
+      const s = config.screenshots || {};
+      const v = config.voice || {};
+      const st = config.stealth || {};
+      const b = config.behavior || {};
+
+      // General
+      setVal('cfg-startPage', g.startPage || 'kees');
+      setVal('cfg-customStartUrl', g.customStartUrl || '');
+      setVal('cfg-language', g.language || 'nl-BE');
+      setVal('cfg-keesPanelPosition', g.keesPanelPosition || 'right');
+      setChecked('cfg-keesPanelDefaultOpen', !!g.keesPanelDefaultOpen);
+      toggleField('field-customStartUrl', g.startPage === 'custom');
+
+      // Screenshots
+      setChecked('cfg-localFolder', s.localFolder !== false);
+      setVal('cfg-localFolderPath', s.localFolderPath || '~/Pictures/Tandem/');
+
+      // Voice
+      setVal('cfg-voiceLanguage', v.inputLanguage || 'nl-BE');
+      setChecked('cfg-autoSendOnSilence', v.autoSendOnSilence !== false);
+      const timeout = v.silenceTimeoutSeconds || 2;
+      document.getElementById('cfg-silenceTimeout').value = timeout;
+      document.getElementById('silenceTimeoutVal').textContent = timeout + 's';
+
+      // Stealth
+      setVal('cfg-userAgent', st.userAgent || 'auto');
+      setVal('cfg-customUserAgent', st.customUserAgent || '');
+      setVal('cfg-stealthLevel', st.stealthLevel || 'medium');
+      setVal('cfg-acceptLanguage', st.acceptLanguage || 'auto');
+      setVal('cfg-customAcceptLanguage', st.customAcceptLanguage || '');
+      toggleField('field-customUserAgent', st.userAgent === 'custom');
+      toggleField('field-customAcceptLanguage', st.acceptLanguage === 'custom');
+
+      // Behavior
+      setChecked('cfg-trackingEnabled', b.trackingEnabled !== false);
+    }
+
+    function setVal(id, val) { const el = document.getElementById(id); if (el) el.value = val; }
+    function setChecked(id, val) { const el = document.getElementById(id); if (el) el.checked = val; }
+    function toggleField(id, show) { const el = document.getElementById(id); if (el) el.style.display = show ? 'flex' : 'none'; }
+
+    // ═══ Save on change ═══
+    async function saveConfig(patch) {
+      try {
+        const res = await fetch(`${API}/config`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(patch),
+        });
+        if (res.ok) {
+          config = await res.json();
+          showToast('Opgeslagen ✓');
+        }
+      } catch { showToast('Opslaan mislukt ✕'); }
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 2000);
+    }
+
+    // Wire up all controls
+    function wire(id, path, transform) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const event = el.type === 'checkbox' ? 'change' : el.tagName === 'SELECT' ? 'change' : 'blur';
+      el.addEventListener(event, () => {
+        let val = el.type === 'checkbox' ? el.checked : el.value;
+        if (transform) val = transform(val);
+        // Build nested patch from dot path
+        const parts = path.split('.');
+        const patch = {};
+        let cur = patch;
+        for (let i = 0; i < parts.length - 1; i++) {
+          cur[parts[i]] = {};
+          cur = cur[parts[i]];
+        }
+        cur[parts[parts.length - 1]] = val;
+        saveConfig(patch);
+      });
+    }
+
+    wire('cfg-startPage', 'general.startPage');
+    wire('cfg-customStartUrl', 'general.customStartUrl');
+    wire('cfg-language', 'general.language');
+    wire('cfg-keesPanelPosition', 'general.keesPanelPosition');
+    wire('cfg-keesPanelDefaultOpen', 'general.keesPanelDefaultOpen');
+    wire('cfg-localFolder', 'screenshots.localFolder');
+    wire('cfg-localFolderPath', 'screenshots.localFolderPath');
+    wire('cfg-voiceLanguage', 'voice.inputLanguage');
+    wire('cfg-autoSendOnSilence', 'voice.autoSendOnSilence');
+    wire('cfg-userAgent', 'stealth.userAgent');
+    wire('cfg-customUserAgent', 'stealth.customUserAgent');
+    wire('cfg-stealthLevel', 'stealth.stealthLevel');
+    wire('cfg-acceptLanguage', 'stealth.acceptLanguage');
+    wire('cfg-customAcceptLanguage', 'stealth.customAcceptLanguage');
+    wire('cfg-trackingEnabled', 'behavior.trackingEnabled');
+
+    // Silence timeout slider
+    const silenceSlider = document.getElementById('cfg-silenceTimeout');
+    const silenceVal = document.getElementById('silenceTimeoutVal');
+    silenceSlider.addEventListener('input', () => {
+      silenceVal.textContent = silenceSlider.value + 's';
+    });
+    silenceSlider.addEventListener('change', () => {
+      saveConfig({ voice: { silenceTimeoutSeconds: parseFloat(silenceSlider.value) } });
+    });
+
+    // Show/hide conditional fields
+    document.getElementById('cfg-startPage').addEventListener('change', (e) => {
+      toggleField('field-customStartUrl', e.target.value === 'custom');
+    });
+    document.getElementById('cfg-userAgent').addEventListener('change', (e) => {
+      toggleField('field-customUserAgent', e.target.value === 'custom');
+    });
+    document.getElementById('cfg-acceptLanguage').addEventListener('change', (e) => {
+      toggleField('field-customAcceptLanguage', e.target.value === 'custom');
+    });
+
+    // ═══ Navigation highlight ═══
+    const navLinks = document.querySelectorAll('.settings-nav a');
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          navLinks.forEach(l => l.classList.remove('active'));
+          const link = document.querySelector(`.settings-nav a[data-section="${entry.target.id}"]`);
+          if (link) link.classList.add('active');
+        }
+      }
+    }, { rootMargin: '-20% 0px -70% 0px' });
+    document.querySelectorAll('.section').forEach(s => observer.observe(s));
+
+    // ═══ Behavior stats ═══
+    async function loadBehaviorStats() {
+      try {
+        const res = await fetch(`${API}/behavior/stats`);
+        if (res.ok) {
+          const stats = await res.json();
+          document.getElementById('stat-todayEvents').textContent = stats.todayEvents ?? '—';
+          document.getElementById('stat-totalFiles').textContent = stats.totalFiles ?? '—';
+          document.getElementById('stat-sessionEvents').textContent = stats.totalEventsSession ?? '—';
+          document.getElementById('stat-avgKeypress').textContent = stats.avgKeypressIntervalMs ?? '—';
+          document.getElementById('stat-avgClick').textContent = stats.avgClickDelayMs ?? '—';
+        }
+      } catch { /* API not ready */ }
+    }
+
+    // ═══ Confirm modal ═══
+    let modalCallback = null;
+    function showModal(title, text, onConfirm) {
+      document.getElementById('modal-title').textContent = title;
+      document.getElementById('modal-text').textContent = text;
+      modalCallback = onConfirm;
+      document.getElementById('modal-overlay').classList.add('show');
+    }
+    document.getElementById('modal-cancel').addEventListener('click', () => {
+      document.getElementById('modal-overlay').classList.remove('show');
+      modalCallback = null;
+    });
+    document.getElementById('modal-confirm').addEventListener('click', () => {
+      document.getElementById('modal-overlay').classList.remove('show');
+      if (modalCallback) modalCallback();
+      modalCallback = null;
+    });
+
+    // Clear behavior data
+    document.getElementById('btn-clearBehavior').addEventListener('click', () => {
+      showModal('Behavioral data wissen?', 'Alle opgeslagen gedragspatronen worden verwijderd. Dit kan niet ongedaan worden.', async () => {
+        try {
+          await fetch(`${API}/behavior/clear`, { method: 'POST' });
+          showToast('Behavioral data gewist ✓');
+          loadBehaviorStats();
+        } catch { showToast('Wissen mislukt ✕'); }
+      });
+    });
+
+    // Export data
+    document.getElementById('btn-export').addEventListener('click', async () => {
+      try {
+        const res = await fetch(`${API}/data/export`);
+        if (res.ok) {
+          const data = await res.json();
+          const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `tandem-export-${new Date().toISOString().slice(0,10)}.json`;
+          a.click();
+          URL.revokeObjectURL(url);
+          showToast('Data geëxporteerd ✓');
+        }
+      } catch { showToast('Export mislukt ✕'); }
+    });
+
+    // Import data
+    const importFile = document.getElementById('import-file');
+    document.getElementById('btn-import').addEventListener('click', () => importFile.click());
+    importFile.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        const res = await fetch(`${API}/data/import`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+        if (res.ok) {
+          showToast('Data geïmporteerd ✓');
+          loadConfig();
+        }
+      } catch { showToast('Import mislukt ✕'); }
+      importFile.value = '';
+    });
+
+    // Wipe all data
+    document.getElementById('btn-wipe').addEventListener('click', () => {
+      showModal('⚠️ ALLE data wissen?', 'Dit verwijdert je chat history, config, behavioral data en meer. Dit kan NIET ongedaan worden!', async () => {
+        try {
+          await fetch(`${API}/data/wipe`, { method: 'POST' });
+          showToast('Alle data gewist ✓');
+          loadConfig();
+          loadBehaviorStats();
+        } catch { showToast('Wissen mislukt ✕'); }
+      });
+    });
+
+    // ═══ Init ═══
+    loadConfig();
+    loadBehaviorStats();
+    // Refresh stats every 10s
+    setInterval(loadBehaviorStats, 10000);
+  </script>
+</body>
+</html>

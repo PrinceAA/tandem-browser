@@ -10,6 +10,7 @@ import { DrawOverlayManager } from './draw/overlay';
 import { ActivityTracker } from './activity/tracker';
 import { VoiceManager } from './voice/recognition';
 import { BehaviorObserver } from './behavior/observer';
+import { ConfigManager } from './config/manager';
 
 const IS_DEV = process.argv.includes('--dev');
 const API_PORT = 8765;
@@ -22,6 +23,7 @@ let drawManager: DrawOverlayManager | null = null;
 let activityTracker: ActivityTracker | null = null;
 let voiceManager: VoiceManager | null = null;
 let behaviorObserver: BehaviorObserver | null = null;
+let configManager: ConfigManager | null = null;
 
 async function createWindow(): Promise<BrowserWindow> {
   const partition = 'persist:tandem';
@@ -59,13 +61,14 @@ async function createWindow(): Promise<BrowserWindow> {
 }
 
 async function startAPI(win: BrowserWindow): Promise<void> {
+  configManager = new ConfigManager();
   tabManager = new TabManager(win);
   panelManager = new PanelManager(win);
   drawManager = new DrawOverlayManager(win);
   activityTracker = new ActivityTracker(win, panelManager, drawManager);
   voiceManager = new VoiceManager(win, panelManager);
   behaviorObserver = new BehaviorObserver(win);
-  api = new TandemAPI(win, API_PORT, tabManager, panelManager, drawManager, activityTracker, voiceManager, behaviorObserver);
+  api = new TandemAPI(win, API_PORT, tabManager, panelManager, drawManager, activityTracker, voiceManager, behaviorObserver, configManager);
   await api.start();
   console.log(`🧠 Tandem API running on http://localhost:${API_PORT}`);
 
@@ -193,6 +196,11 @@ function registerShortcuts(): void {
   // Cmd+Shift+S — quick screenshot (no draw mode)
   globalShortcut.register('CommandOrControl+Shift+S', () => {
     mainWindow?.webContents.send('shortcut', 'quick-screenshot');
+  });
+
+  // Cmd+, — open settings
+  globalShortcut.register('CommandOrControl+,', () => {
+    mainWindow?.webContents.send('shortcut', 'open-settings');
   });
 
   // Cmd+1-9 — switch tabs

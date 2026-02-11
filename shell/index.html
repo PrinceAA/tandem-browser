@@ -878,12 +878,29 @@
           if (activeTabId) window.tandem.closeTab(activeTabId);
         } else if (action === 'quick-screenshot') {
           window.tandem.quickScreenshot();
+        } else if (action === 'open-settings') {
+          openSettings();
         } else if (action.startsWith('focus-tab-')) {
           const index = parseInt(action.replace('focus-tab-', ''), 10);
           window.tandem.focusTabByIndex(index);
         }
       });
     }
+
+    // Kees badge → right-click or long-press → open settings
+    const keesBadge = document.querySelector('.kees-badge');
+    keesBadge.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      openSettings();
+    });
+    let keesBadgePressTimer = null;
+    keesBadge.addEventListener('mousedown', () => {
+      keesBadgePressTimer = setTimeout(() => openSettings(), 600);
+    });
+    keesBadge.addEventListener('mouseup', () => { clearTimeout(keesBadgePressTimer); });
+    keesBadge.addEventListener('mouseleave', () => { clearTimeout(keesBadgePressTimer); });
+    keesBadge.style.cursor = 'pointer';
+    keesBadge.title = 'Rechts-klik voor instellingen';
 
     // Screenshot toolbar button
     document.getElementById('btn-screenshot').addEventListener('click', () => {
@@ -1429,6 +1446,32 @@
         window.tandem.snapForKees();
       });
     }
+
+    // ═══════════════════════════════════════════════
+    // Settings — open in active tab
+    // ═══════════════════════════════════════════════
+    function openSettings() {
+      const shellPath = window.location.href.replace(/\/[^/]*$/, '');
+      const settingsUrl = shellPath + '/settings.html';
+      const entry = tabs.get(activeTabId);
+      if (entry) {
+        entry.webview.loadURL(settingsUrl);
+      }
+    }
+
+    // Handle tandem://settings in URL bar
+    const _origUrlBarKeydown = urlBar.onkeydown;
+    urlBar.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const val = urlBar.value.trim();
+        if (val === 'tandem://settings') {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          openSettings();
+          return;
+        }
+      }
+    }, true); // capture phase to run before existing handler
 
     // ═══════════════════════════════════════════════
     // Chat polling — fetch new messages every 2 seconds

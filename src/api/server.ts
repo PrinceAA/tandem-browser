@@ -1,6 +1,9 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import http from 'http';
+import path from 'path';
+import fs from 'fs';
+import os from 'os';
 import { BrowserWindow } from 'electron';
 import { copilotAlert } from '../main';
 import { TabManager } from '../tabs/manager';
@@ -10,6 +13,7 @@ import { ActivityTracker } from '../activity/tracker';
 import { VoiceManager } from '../voice/recognition';
 import { BehaviorObserver } from '../behavior/observer';
 import { humanizedClick, humanizedType } from '../input/humanized';
+import { ConfigManager } from '../config/manager';
 
 export class TandemAPI {
   private app: express.Application;
@@ -22,8 +26,9 @@ export class TandemAPI {
   private activityTracker: ActivityTracker;
   private voiceManager: VoiceManager;
   private behaviorObserver: BehaviorObserver;
+  private configManager: ConfigManager;
 
-  constructor(win: BrowserWindow, port: number = 8765, tabManager: TabManager, panelManager: PanelManager, drawManager: DrawOverlayManager, activityTracker: ActivityTracker, voiceManager: VoiceManager, behaviorObserver: BehaviorObserver) {
+  constructor(win: BrowserWindow, port: number = 8765, tabManager: TabManager, panelManager: PanelManager, drawManager: DrawOverlayManager, activityTracker: ActivityTracker, voiceManager: VoiceManager, behaviorObserver: BehaviorObserver, configManager: ConfigManager) {
     this.win = win;
     this.port = port;
     this.tabManager = tabManager;
@@ -32,6 +37,7 @@ export class TandemAPI {
     this.activityTracker = activityTracker;
     this.voiceManager = voiceManager;
     this.behaviorObserver = behaviorObserver;
+    this.configManager = configManager;
     this.app = express();
     this.app.use(cors());
     this.app.use(express.json());
@@ -553,6 +559,115 @@ export class TandemAPI {
       try {
         const stats = this.behaviorObserver.getStats();
         res.json(stats);
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
+      }
+    });
+
+    // ═══════════════════════════════════════════════
+    // CONFIG — Settings management
+    // ═══════════════════════════════════════════════
+
+    this.app.get('/config', (_req: Request, res: Response) => {
+      try {
+        res.json(this.configManager.getConfig());
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
+      }
+    });
+
+    this.app.patch('/config', (req: Request, res: Response) => {
+      try {
+        const updated = this.configManager.updateConfig(req.body);
+        res.json(updated);
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
+      }
+    });
+
+    // ═══════════════════════════════════════════════
+    // DATA — Export, Import, Wipe
+    // ═══════════════════════════════════════════════
+
+    this.app.post('/behavior/clear', (_req: Request, res: Response) => {
+      try {
+        const rawDir = path.join(os.homedir(), '.tandem', 'behavior', 'raw');
+        if (fs.existsSync(rawDir)) {
+          const files = fs.readdirSync(rawDir).filter(f => f.endsWith('.jsonl'));
+          for (const file of files) {
+            fs.unlinkSync(path.join(rawDir, file));
+          }
+        }
+        res.json({ ok: true, cleared: true });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
+      }
+    });
+
+    this.app.get('/data/export', (_req: Request, res: Response) => {
+      try {
+        const tandemDir = path.join(os.homedir(), '.tandem');
+        const data: Record<string, unknown> = {
+          exportDate: new Date().toISOString(),
+          version: '0.1.0',
+        };
+
+        // Config
+        data.config = this.configManager.getConfig();
+
+        // Chat history
+        const chatPath = path.join(tandemDir, 'chat-history.json');
+        if (fs.existsSync(chatPath)) {
+          try { data.chatHistory = JSON.parse(fs.readFileSync(chatPath, 'utf-8')); } catch { /* skip */ }
+        }
+
+        // Behavior stats
+        data.behaviorStats = this.behaviorObserver.getStats();
+
+        res.json(data);
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
+      }
+    });
+
+    this.app.post('/data/import', (req: Request, res: Response) => {
+      try {
+        const data = req.body;
+        if (data.config) {
+          this.configManager.updateConfig(data.config);
+        }
+        if (data.chatHistory) {
+          const chatPath = path.join(os.homedir(), '.tandem', 'chat-history.json');
+          fs.writeFileSync(chatPath, JSON.stringify(data.chatHistory, null, 2));
+        }
+        res.json({ ok: true, imported: true });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
+      }
+    });
+
+    this.app.post('/data/wipe', (_req: Request, res: Response) => {
+      try {
+        const tandemDir = path.join(os.homedir(), '.tandem');
+
+        // Wipe chat history
+        const chatPath = path.join(tandemDir, 'chat-history.json');
+        if (fs.existsSync(chatPath)) fs.unlinkSync(chatPath);
+
+        // Wipe config
+        const configPath = path.join(tandemDir, 'config.json');
+        if (fs.existsSync(configPath)) fs.unlinkSync(configPath);
+
+        // Wipe behavior data
+        const rawDir = path.join(tandemDir, 'behavior', 'raw');
+        if (fs.existsSync(rawDir)) {
+          const files = fs.readdirSync(rawDir).filter(f => f.endsWith('.jsonl'));
+          for (const file of files) {
+            fs.unlinkSync(path.join(rawDir, file));
+          }
+        }
+
+        res.json({ ok: true, wiped: true });
       } catch (e: any) {
         res.status(500).json({ error: e.message });
       }
