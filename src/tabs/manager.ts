@@ -1,5 +1,7 @@
 import { BrowserWindow, session, WebContents, webContents } from 'electron';
 
+export type TabSource = 'robin' | 'kees';
+
 export interface Tab {
   id: string;
   webContentsId: number;
@@ -9,6 +11,7 @@ export interface Tab {
   groupId: string | null;
   active: boolean;
   createdAt: number;
+  source: TabSource;
 }
 
 export interface TabGroup {
@@ -61,7 +64,7 @@ export class TabManager {
   }
 
   /** Open a new tab */
-  async openTab(url: string = 'about:blank', groupId?: string): Promise<Tab> {
+  async openTab(url: string = 'about:blank', groupId?: string, source: TabSource = 'robin'): Promise<Tab> {
     const id = this.nextId();
 
     // Tell renderer to create a webview and return its webContentsId
@@ -78,9 +81,13 @@ export class TabManager {
       groupId: groupId || null,
       active: false,
       createdAt: Date.now(),
+      source,
     };
 
     this.tabs.set(id, tab);
+
+    // Notify renderer of source indicator
+    this.win.webContents.send('tab-source-changed', { tabId: id, source });
 
     if (groupId && this.groups.has(groupId)) {
       this.groups.get(groupId)!.tabIds.push(id);
@@ -147,6 +154,21 @@ export class TabManager {
     `);
 
     return true;
+  }
+
+  /** Change the source/controller of a tab */
+  setTabSource(tabId: string, source: TabSource): boolean {
+    const tab = this.tabs.get(tabId);
+    if (!tab) return false;
+    tab.source = source;
+    this.win.webContents.send('tab-source-changed', { tabId, source });
+    return true;
+  }
+
+  /** Get a tab's source */
+  getTabSource(tabId: string): TabSource | null {
+    const tab = this.tabs.get(tabId);
+    return tab ? tab.source : null;
   }
 
   /** Update tab metadata (called from renderer events) */
@@ -218,6 +240,7 @@ export class TabManager {
       groupId: null,
       active: true,
       createdAt: Date.now(),
+      source: 'robin',
     };
     this.tabs.set(id, tab);
     this.activeTabId = id;

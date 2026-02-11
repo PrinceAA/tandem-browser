@@ -17,6 +17,8 @@ import { ConfigManager } from '../config/manager';
 import { SiteMemoryManager } from '../memory/site-memory';
 import { WatchManager } from '../watch/watcher';
 import { HeadlessManager } from '../headless/manager';
+import { FormMemoryManager } from '../memory/form-memory';
+import { ContextBridge } from '../bridge/context-bridge';
 
 export class TandemAPI {
   private app: express.Application;
@@ -33,8 +35,10 @@ export class TandemAPI {
   private siteMemory: SiteMemoryManager;
   private watchManager: WatchManager;
   private headlessManager: HeadlessManager;
+  private formMemory: FormMemoryManager;
+  private contextBridge: ContextBridge;
 
-  constructor(win: BrowserWindow, port: number = 8765, tabManager: TabManager, panelManager: PanelManager, drawManager: DrawOverlayManager, activityTracker: ActivityTracker, voiceManager: VoiceManager, behaviorObserver: BehaviorObserver, configManager: ConfigManager, siteMemory: SiteMemoryManager, watchManager: WatchManager, headlessManager: HeadlessManager) {
+  constructor(win: BrowserWindow, port: number = 8765, tabManager: TabManager, panelManager: PanelManager, drawManager: DrawOverlayManager, activityTracker: ActivityTracker, voiceManager: VoiceManager, behaviorObserver: BehaviorObserver, configManager: ConfigManager, siteMemory: SiteMemoryManager, watchManager: WatchManager, headlessManager: HeadlessManager, formMemory: FormMemoryManager, contextBridge: ContextBridge) {
     this.win = win;
     this.port = port;
     this.tabManager = tabManager;
@@ -47,6 +51,8 @@ export class TandemAPI {
     this.siteMemory = siteMemory;
     this.watchManager = watchManager;
     this.headlessManager = headlessManager;
+    this.formMemory = formMemory;
+    this.contextBridge = contextBridge;
     this.app = express();
     this.app.use(cors());
     this.app.use(express.json());
@@ -96,13 +102,22 @@ export class TandemAPI {
     // ═══════════════════════════════════════════════
 
     this.app.post('/navigate', async (req: Request, res: Response) => {
-      const { url } = req.body;
+      const { url, tabId } = req.body;
       if (!url) { res.status(400).json({ error: 'url required' }); return; }
       try {
+        // If tabId specified, focus that tab first
+        if (tabId) {
+          await this.tabManager.focusTab(tabId);
+        }
         const wc = await this.getActiveWC();
         if (!wc) { res.status(500).json({ error: 'No active tab' }); return; }
         wc.loadURL(url);
-        this.panelManager.logActivity('navigate', { url });
+        // Mark tab as Kees-controlled when navigated via API
+        const activeTab = this.tabManager.getActiveTab();
+        if (activeTab) {
+          this.tabManager.setTabSource(activeTab.id, 'kees');
+        }
+        this.panelManager.logActivity('navigate', { url, source: 'kees' });
         res.json({ ok: true, url });
       } catch (e: any) {
         res.status(500).json({ error: e.message });
@@ -353,9 +368,11 @@ export class TandemAPI {
     // ═══════════════════════════════════════════════
 
     this.app.post('/tabs/open', async (req: Request, res: Response) => {
-      const { url = 'about:blank', groupId } = req.body;
+      const { url = 'about:blank', groupId, source = 'robin' } = req.body;
       try {
-        const tab = await this.tabManager.openTab(url, groupId);
+        const tabSource = source === 'kees' ? 'kees' as const : 'robin' as const;
+        const tab = await this.tabManager.openTab(url, groupId, tabSource);
+        this.panelManager.logActivity('tab-open', { url, source: tabSource });
         res.json({ ok: true, tab });
       } catch (e: any) {
         res.status(500).json({ error: e.message });
@@ -797,6 +814,114 @@ export class TandemAPI {
       try {
         this.headlessManager.close();
         res.json({ ok: true });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
+      }
+    });
+
+    // ═══════════════════════════════════════════════
+    // FORM MEMORY — Phase 3.4
+    // ═══════════════════════════════════════════════
+
+    this.app.get('/forms/memory', (_req: Request, res: Response) => {
+      try {
+        const domains = this.formMemory.listAll();
+        res.json({ domains });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
+      }
+    });
+
+    this.app.get('/forms/memory/:domain', (req: Request, res: Response) => {
+      try {
+        const data = this.formMemory.getForDomain(req.params.domain as string);
+        if (!data) { res.status(404).json({ error: 'No form data for this domain' }); return; }
+        res.json(data);
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
+      }
+    });
+
+    this.app.post('/forms/fill', (req: Request, res: Response) => {
+      try {
+        const { domain } = req.body;
+        if (!domain) { res.status(400).json({ error: 'domain required' }); return; }
+        const fields = this.formMemory.getFillData(domain);
+        if (!fields) { res.status(404).json({ error: 'No form data for this domain' }); return; }
+        res.json({ domain, fields });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
+      }
+    });
+
+    this.app.delete('/forms/memory/:domain', (req: Request, res: Response) => {
+      try {
+        const deleted = this.formMemory.deleteDomain(req.params.domain as string);
+        res.json({ ok: deleted });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
+      }
+    });
+
+    // ═══════════════════════════════════════════════
+    // CONTEXT BRIDGE — Phase 3.5
+    // ═══════════════════════════════════════════════
+
+    this.app.get('/context/recent', (req: Request, res: Response) => {
+      try {
+        const limit = parseInt(req.query.limit as string) || 50;
+        const pages = this.contextBridge.getRecent(limit);
+        res.json({ pages });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
+      }
+    });
+
+    this.app.get('/context/search', (req: Request, res: Response) => {
+      try {
+        const q = req.query.q as string;
+        if (!q) { res.status(400).json({ error: 'q parameter required' }); return; }
+        const results = this.contextBridge.search(q);
+        res.json({ results });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
+      }
+    });
+
+    this.app.get('/context/page', (req: Request, res: Response) => {
+      try {
+        const url = req.query.url as string;
+        if (!url) { res.status(400).json({ error: 'url parameter required' }); return; }
+        const page = this.contextBridge.getPage(url);
+        if (!page) { res.status(404).json({ error: 'Page not found in context' }); return; }
+        res.json(page);
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
+      }
+    });
+
+    this.app.post('/context/note', (req: Request, res: Response) => {
+      try {
+        const { url, note } = req.body;
+        if (!url || !note) { res.status(400).json({ error: 'url and note required' }); return; }
+        const page = this.contextBridge.addNote(url, note);
+        res.json({ ok: true, page });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
+      }
+    });
+
+    // ═══════════════════════════════════════════════
+    // BIDIRECTIONAL STEERING — Phase 3.6
+    // ═══════════════════════════════════════════════
+
+    this.app.post('/tabs/source', (req: Request, res: Response) => {
+      try {
+        const { tabId, source } = req.body;
+        if (!tabId || !source) { res.status(400).json({ error: 'tabId and source required' }); return; }
+        if (source !== 'robin' && source !== 'kees') { res.status(400).json({ error: 'source must be robin or kees' }); return; }
+        const ok = this.tabManager.setTabSource(tabId, source);
+        res.json({ ok });
       } catch (e: any) {
         res.status(500).json({ error: e.message });
       }

@@ -14,6 +14,8 @@ import { ConfigManager } from './config/manager';
 import { SiteMemoryManager } from './memory/site-memory';
 import { WatchManager } from './watch/watcher';
 import { HeadlessManager } from './headless/manager';
+import { FormMemoryManager } from './memory/form-memory';
+import { ContextBridge } from './bridge/context-bridge';
 
 const IS_DEV = process.argv.includes('--dev');
 const API_PORT = 8765;
@@ -30,6 +32,8 @@ let configManager: ConfigManager | null = null;
 let siteMemory: SiteMemoryManager | null = null;
 let watchManager: WatchManager | null = null;
 let headlessManager: HeadlessManager | null = null;
+let formMemory: FormMemoryManager | null = null;
+let contextBridge: ContextBridge | null = null;
 
 async function createWindow(): Promise<BrowserWindow> {
   const partition = 'persist:tandem';
@@ -77,7 +81,9 @@ async function startAPI(win: BrowserWindow): Promise<void> {
   siteMemory = new SiteMemoryManager();
   watchManager = new WatchManager();
   headlessManager = new HeadlessManager();
-  api = new TandemAPI(win, API_PORT, tabManager, panelManager, drawManager, activityTracker, voiceManager, behaviorObserver, configManager, siteMemory, watchManager, headlessManager);
+  formMemory = new FormMemoryManager();
+  contextBridge = new ContextBridge();
+  api = new TandemAPI(win, API_PORT, tabManager, panelManager, drawManager, activityTracker, voiceManager, behaviorObserver, configManager, siteMemory, watchManager, headlessManager, formMemory, contextBridge);
   await api.start();
   console.log(`🧠 Tandem API running on http://localhost:${API_PORT}`);
 
@@ -164,6 +170,34 @@ async function startAPI(win: BrowserWindow): Promise<void> {
       // End tracking for previous URL
       const activeTab = tabManager?.getActiveTab();
       if (activeTab?.url) siteMemory.trackVisitEnd(activeTab.url);
+    }
+    // Record context snapshot on page load
+    if (contextBridge && data.type === 'did-finish-load' && data.url) {
+      const activeTab = tabManager?.getActiveTab();
+      if (activeTab) {
+        tabManager?.getActiveWebContents().then(wc => {
+          if (wc) {
+            wc.executeJavaScript(`
+              (() => {
+                const title = document.title || '';
+                const headings = Array.from(document.querySelectorAll('h1, h2, h3')).slice(0, 30).map(h => h.textContent?.trim() || '').filter(Boolean);
+                const linksCount = document.querySelectorAll('a[href]').length;
+                const body = document.body ? document.body.innerText || '' : '';
+                return { title, headings, linksCount, body };
+              })()
+            `).then((pageData: { title: string; headings: string[]; linksCount: number; body: string }) => {
+              contextBridge!.recordSnapshot(data.url!, pageData.title, pageData.body, pageData.headings, pageData.linksCount);
+            }).catch(() => {});
+          }
+        }).catch(() => {});
+      }
+    }
+  });
+
+  // ═══ Form submit tracking ═══
+  ipcMain.on('form-submitted', (_event, data: { url: string; fields: Array<{ name: string; type: string; id: string; value: string }> }) => {
+    if (formMemory && data.url && data.fields) {
+      formMemory.recordForm(data.url, data.fields);
     }
   });
 
