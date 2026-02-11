@@ -1,4 +1,4 @@
-import { app, BrowserWindow, session, ipcMain, Notification, globalShortcut, clipboard, nativeImage, webContents } from 'electron';
+import { app, BrowserWindow, session, ipcMain, Notification, globalShortcut, clipboard, nativeImage, webContents, Menu } from 'electron';
 import path from 'path';
 import fs from 'fs';
 
@@ -401,121 +401,118 @@ async function startAPI(win: BrowserWindow): Promise<void> {
   });
 }
 
-function registerShortcut(accelerator: string, callback: () => void): void {
-  const success = globalShortcut.register(accelerator, callback);
-  if (!success) {
-    console.warn(`⚠️ Failed to register shortcut: ${accelerator}`);
-  }
-}
+function buildAppMenu(): void {
+  const send = (action: string) => mainWindow?.webContents.send('shortcut', action);
 
-function registerShortcuts(): void {
-  // Cmd+T — new tab
-  registerShortcut('CommandOrControl+T', () => {
-    mainWindow?.webContents.send('shortcut', 'new-tab');
-  });
+  const template: Electron.MenuItemConstructorOptions[] = [
+    {
+      label: app.name,
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        { label: 'Settings', accelerator: 'CmdOrCtrl+,', click: () => send('open-settings') },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' },
+      ],
+    },
+    {
+      label: 'File',
+      submenu: [
+        { label: 'New Tab', accelerator: 'CmdOrCtrl+T', click: () => send('new-tab') },
+        { label: 'Close Tab', accelerator: 'CmdOrCtrl+W', click: () => send('close-tab') },
+        { type: 'separator' },
+        { label: 'Bookmark Page', accelerator: 'CmdOrCtrl+D', click: () => send('bookmark-page') },
+        { label: 'Find in Page', accelerator: 'CmdOrCtrl+F', click: () => send('find-in-page') },
+        { label: 'History', accelerator: 'CmdOrCtrl+Y', click: () => send('open-history') },
+      ],
+    },
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'selectAll' },
+      ],
+    },
+    {
+      label: 'View',
+      submenu: [
+        { label: 'Zoom In', accelerator: 'CmdOrCtrl+=', click: () => send('zoom-in') },
+        { label: 'Zoom Out', accelerator: 'CmdOrCtrl+-', click: () => send('zoom-out') },
+        { label: 'Reset Zoom', accelerator: 'CmdOrCtrl+0', click: () => send('zoom-reset') },
+        { type: 'separator' },
+        { role: 'togglefullscreen' },
+      ],
+    },
+    {
+      label: 'Kees',
+      submenu: [
+        { label: 'Toggle Panel', accelerator: 'CmdOrCtrl+K', click: () => panelManager?.togglePanel() },
+        { label: 'Voice Input', accelerator: 'CmdOrCtrl+Shift+M', click: () => voiceManager?.toggleVoice() },
+        { label: 'PiP Mode', accelerator: 'CmdOrCtrl+Shift+P', click: () => pipManager?.toggle() },
+        { type: 'separator' },
+        { label: 'Draw Mode', accelerator: 'CmdOrCtrl+Shift+D', click: () => drawManager?.toggleDrawMode() },
+        { label: 'Quick Screenshot', accelerator: 'CmdOrCtrl+Shift+S', click: () => send('quick-screenshot') },
+        { type: 'separator' },
+        { label: 'Record Tab Audio', accelerator: 'CmdOrCtrl+R', click: () => {
+          if (audioCaptureManager) {
+            if (audioCaptureManager.isRecording()) {
+              audioCaptureManager.stopRecording();
+              mainWindow?.webContents.send('audio-recording-status', { recording: false });
+            } else {
+              const activeTab = tabManager?.getActiveTab();
+              if (activeTab) {
+                audioCaptureManager.startRecording(activeTab.webContentsId).then(() => {
+                  mainWindow?.webContents.send('audio-recording-status', { recording: true });
+                }).catch((e) => console.warn('Audio capture start failed:', e.message));
+              }
+            }
+          }
+        }},
+        { label: 'ClaroNote Record', accelerator: 'CmdOrCtrl+Shift+C', click: () => send('claronote-record') },
+      ],
+    },
+    {
+      label: 'Window',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'zoom' },
+        { type: 'separator' },
+        { role: 'front' },
+      ],
+    },
+    {
+      label: 'Help',
+      submenu: [
+        { label: 'Keyboard Shortcuts', accelerator: 'CmdOrCtrl+Shift+/', click: () => send('show-shortcuts') },
+      ],
+    },
+  ];
 
-  // Cmd+W — close tab
-  registerShortcut('CommandOrControl+W', () => {
-    mainWindow?.webContents.send('shortcut', 'close-tab');
-  });
-
-  // Cmd+K — toggle Kees panel
-  registerShortcut('CommandOrControl+K', () => {
-    panelManager?.togglePanel();
-  });
-
-  // Cmd+Shift+D — toggle draw mode (was Cmd+D, moved for bookmarks)
-  registerShortcut('CommandOrControl+Shift+D', () => {
-    drawManager?.toggleDrawMode();
-  });
-
-  // Cmd+D — bookmark current page
-  registerShortcut('CommandOrControl+D', () => {
-    mainWindow?.webContents.send('shortcut', 'bookmark-page');
-  });
-
-  // Cmd+F — find in page
-  registerShortcut('CommandOrControl+F', () => {
-    mainWindow?.webContents.send('shortcut', 'find-in-page');
-  });
-
-  // Cmd+Y — open history page
-  registerShortcut('CommandOrControl+Y', () => {
-    mainWindow?.webContents.send('shortcut', 'open-history');
-  });
-
-  // Cmd+Shift+M — toggle voice input (Shift+M to avoid macOS Cmd+M minimize conflict)
-  registerShortcut('CommandOrControl+Shift+M', () => {
-    voiceManager?.toggleVoice();
-  });
-
-  // Cmd+Shift+S — quick screenshot (no draw mode)
-  registerShortcut('CommandOrControl+Shift+S', () => {
-    mainWindow?.webContents.send('shortcut', 'quick-screenshot');
-  });
-
-  // Cmd+P — toggle PiP
-  registerShortcut('CommandOrControl+P', () => {
-    pipManager?.toggle();
-  });
-
-  // Cmd+, — open settings
-  registerShortcut('CommandOrControl+,', () => {
-    mainWindow?.webContents.send('shortcut', 'open-settings');
-  });
-
-  // Cmd+R — toggle audio recording of current tab
-  registerShortcut('CommandOrControl+R', () => {
-    if (audioCaptureManager) {
-      if (audioCaptureManager.isRecording()) {
-        audioCaptureManager.stopRecording();
-        mainWindow?.webContents.send('audio-recording-status', { recording: false });
-      } else {
-        const activeTab = tabManager?.getActiveTab();
-        if (activeTab) {
-          audioCaptureManager.startRecording(activeTab.webContentsId).then(() => {
-            mainWindow?.webContents.send('audio-recording-status', { recording: true });
-          }).catch((e) => console.warn('Audio capture start failed:', e.message));
-        }
-      }
-    }
-  });
-
-  // Cmd+Shift+/ — show keyboard shortcuts overlay (Cmd+? is actually Cmd+Shift+/ on macOS)
-  registerShortcut('CommandOrControl+Shift+/', () => {
-    mainWindow?.webContents.send('shortcut', 'show-shortcuts');
-  });
-
-  // Cmd+= — zoom in
-  registerShortcut('CommandOrControl+=', () => {
-    mainWindow?.webContents.send('shortcut', 'zoom-in');
-  });
-
-  // Cmd+- — zoom out  
-  registerShortcut('CommandOrControl+-', () => {
-    mainWindow?.webContents.send('shortcut', 'zoom-out');
-  });
-
-  // Cmd+0 — reset zoom
-  registerShortcut('CommandOrControl+0', () => {
-    mainWindow?.webContents.send('shortcut', 'zoom-reset');
-  });
-
-  // Cmd+1-9 — switch tabs
+  // Add Cmd+1-9 tab switching (hidden menu items)
+  const tabSwitchItems: Electron.MenuItemConstructorOptions[] = [];
   for (let i = 1; i <= 9; i++) {
-    registerShortcut(`CommandOrControl+${i}`, () => {
-      mainWindow?.webContents.send('shortcut', `focus-tab-${i - 1}`);
+    tabSwitchItems.push({
+      label: `Tab ${i}`,
+      accelerator: `CmdOrCtrl+${i}`,
+      visible: false,
+      click: () => send(`focus-tab-${i - 1}`),
     });
   }
+  (template[1].submenu as Electron.MenuItemConstructorOptions[]).push(
+    { type: 'separator' },
+    ...tabSwitchItems
+  );
 
-  // Cmd+Shift+C — ClaroNote quick record toggle
-  registerShortcut('CommandOrControl+Shift+C', () => {
-    mainWindow?.webContents.send('shortcut', 'claronote-record');
-  });
-}
-
-function unregisterShortcuts(): void {
-  globalShortcut.unregisterAll();
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
 // Copilot alert — notify Robin when Kees needs help
@@ -529,7 +526,7 @@ export function copilotAlert(title: string, body: string): void {
 app.whenReady().then(async () => {
   const win = await createWindow();
   await startAPI(win);
-  registerShortcuts();
+  buildAppMenu();
 
   // Keep shortcuts always registered while app is running
   // (blur/focus approach broke shortcuts when webview had focus)
@@ -538,18 +535,18 @@ app.whenReady().then(async () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow().then(w => {
         startAPI(w);
-        registerShortcuts();
+        buildAppMenu();
       });
     }
   });
 });
 
 app.on('will-quit', () => {
-  globalShortcut.unregisterAll();
+  
 });
 
 app.on('window-all-closed', () => {
-  globalShortcut.unregisterAll();
+  
   if (behaviorObserver) behaviorObserver.destroy();
   if (watchManager) watchManager.destroy();
   if (headlessManager) headlessManager.destroy();
