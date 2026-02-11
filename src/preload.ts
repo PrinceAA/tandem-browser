@@ -40,4 +40,30 @@ contextBridge.exposeInMainWorld('tandem', {
   onTabRegistered: (callback: (data: { tabId: string }) => void) => {
     ipcRenderer.on('tab-registered', (_event, data) => callback(data));
   },
+
+  // Panel
+  onPanelToggle: (callback: (data: { open: boolean }) => void) => {
+    ipcRenderer.on('panel-toggle', (_event, data) => callback(data));
+  },
+  onActivityEvent: (callback: (event: any) => void) => {
+    ipcRenderer.on('activity-event', (_event, data) => callback(data));
+  },
+  onChatMessage: (callback: (msg: any) => void) => {
+    ipcRenderer.on('chat-message', (_event, data) => callback(data));
+  },
+  sendChatMessage: (text: string) => {
+    ipcRenderer.send('chat-send', text);
+  },
+
+  // Draw overlay
+  onDrawMode: (callback: (data: { enabled: boolean }) => void) => {
+    ipcRenderer.on('draw-mode', (_event, data) => callback(data));
+  },
+  onDrawClear: (callback: () => void) => {
+    ipcRenderer.on('draw-clear', () => callback());
+  },
+  onScreenshotTaken: (callback: (data: { path: string; filename: string }) => void) => {
+    ipcRenderer.on('screenshot-taken', (_event, data) => callback(data));
+  },
+  snapForKees: () => ipcRenderer.invoke('snap-for-kees'),
 });
