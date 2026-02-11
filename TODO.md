@@ -65,6 +65,20 @@
 - [ ] API: `GET /watch` — polling endpoint voor Kees
 - [ ] API: `WS /watch/live` — WebSocket stream (later)
 
+### 2.6 Behavioral Learning 🧬
+- [ ] Observation layer: track mouse, clicks, scroll, keypress via Electron events
+- [ ] Raw data opslag: `~/.tandem/behavior/raw/`
+- [ ] Profiel compiler: statistische analyse na ~1 week data
+- [ ] Typing bigram timing model (per toets-paar interval)
+- [ ] Mouse path Bézier curve templates
+- [ ] Scroll pattern model (snelheid + pauze distributie)
+- [ ] Click hesitatie model (hover → click delay)
+- [ ] Dagritme variatie (correlatie tijd ↔ snelheid)
+- [ ] Per-site gedragsclusters
+- [ ] Replay engine: sample uit profiel bij automated acties
+- [ ] Profiel: `~/.tandem/behavior/robin-profile.json`
+- [ ] Fallback: gaussian defaults als profiel nog leeg
+
 ---
 
 ## Phase 3: Echte Browser Features 📦

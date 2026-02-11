@@ -94,12 +94,29 @@ De website mag ALLEEN zien: "een mens in Chrome op een Mac in België". Kees sta
 - Injected DOM elements — alles wat niet van de site is → NOOIT in webview
 - WebSocket naar localhost — onze API mag NIET vanuit de webview aangeroepen worden
 
-### Timing humanisatie
-Elke automated actie MOET:
-1. Random delay: 80-300ms voor clicks, 30-120ms tussen toetsaanslagen
-2. Gaussian verdeling (niet uniform — mensen zijn niet uniform)
-3. Occasionele langere pauze (500-2000ms) — mensen kijken soms even
-4. Scroll: variabele snelheid, niet pixel-perfect
+### Timing humanisatie — Behavioral Learning
+Tandem leert Robin's gedragspatronen en repliceert die bij automated acties.
+
+**Observation layer** (altijd actief, passief):
+- Track via Electron main process events (NIET in webview)
+- Mouse movement paths, click delays, scroll patterns, typing rhythm
+- Opslag: `~/.tandem/behavior/` (raw data + gecompileerd profiel)
+
+**Profiel bevat:**
+- Typing bigram timing (interval per toets-combinatie)
+- Click hesitatie distributie (hover → click delay)
+- Scroll patronen (snelheid, pauzes, leestijd)
+- Muispad curves (Bézier templates)
+- Dagritme variatie (nacht = langzamer)
+- Per-site gedragsclusters
+
+**Bij automated acties:**
+- Sample uit Robin's echte distributies (niet hardcoded ranges)
+- Muisbewegingen: Bézier curves gebaseerd op geleerde paden
+- Typing: Robin's eigen ritme per toets-combinatie + variatie
+- Fallback (als profiel nog leeg): gaussian random 80-300ms clicks, 30-120ms typing
+
+**Gouden regel:** Het gedrag moet statistisch ononderscheidbaar zijn van Robin's echte browsing.
 
 ## Bestandsstructuur
 
