@@ -69,14 +69,84 @@ export class StealthManager {
         get: () => ['nl-BE', 'nl', 'en-US', 'en']
       });
 
-      // Chrome runtime (sites check this)
+      // Chrome runtime — complete mock matching real Chrome
       if (!window.chrome) {
-        window.chrome = {
-          runtime: { id: undefined },
-          loadTimes: function() {},
-          csi: function() {},
-          app: { isInstalled: false, InstallState: { DISABLED: 'disabled', INSTALLED: 'installed', NOT_INSTALLED: 'not_installed' } }
+        window.chrome = {};
+      }
+      if (!window.chrome.runtime) {
+        window.chrome.runtime = {
+          OnInstalledReason: { CHROME_UPDATE: 'chrome_update', INSTALL: 'install', SHARED_MODULE_UPDATE: 'shared_module_update', UPDATE: 'update' },
+          OnRestartRequiredReason: { APP_UPDATE: 'app_update', OS_UPDATE: 'os_update', PERIODIC: 'periodic' },
+          PlatformArch: { ARM: 'arm', ARM64: 'arm64', MIPS: 'mips', MIPS64: 'mips64', X86_32: 'x86-32', X86_64: 'x86-64' },
+          PlatformNaclArch: { ARM: 'arm', MIPS: 'mips', MIPS64: 'mips64', X86_32: 'x86-32', X86_64: 'x86-64' },
+          PlatformOs: { ANDROID: 'android', CROS: 'cros', LINUX: 'linux', MAC: 'mac', OPENBSD: 'openbsd', WIN: 'win' },
+          RequestUpdateCheckStatus: { NO_UPDATE: 'no_update', THROTTLED: 'throttled', UPDATE_AVAILABLE: 'update_available' },
+          connect: function() { return { onDisconnect: { addListener: function() {} }, onMessage: { addListener: function() {} }, postMessage: function() {}, disconnect: function() {} }; },
+          sendMessage: function() {},
+          id: undefined,
         };
+      }
+      if (!window.chrome.loadTimes) {
+        window.chrome.loadTimes = function() {
+          return { commitLoadTime: Date.now() / 1000, connectionInfo: 'h2', finishDocumentLoadTime: Date.now() / 1000, finishLoadTime: Date.now() / 1000, firstPaintAfterLoadTime: 0, firstPaintTime: Date.now() / 1000, navigationType: 'Other', npnNegotiatedProtocol: 'h2', requestTime: Date.now() / 1000 - 0.3, startLoadTime: Date.now() / 1000 - 0.3, wasAlternateProtocolAvailable: false, wasFetchedViaSpdy: true, wasNpnNegotiated: true };
+        };
+      }
+      if (!window.chrome.csi) {
+        window.chrome.csi = function() {
+          return { onloadT: Date.now(), pageT: Date.now() / 1000, startE: Date.now(), tran: 15 };
+        };
+      }
+      if (!window.chrome.app) {
+        window.chrome.app = { isInstalled: false, getDetails: function() { return null; }, getIsInstalled: function() { return false; }, installState: function() { return 'not_installed'; }, runningState: function() { return 'cannot_run'; }, InstallState: { DISABLED: 'disabled', INSTALLED: 'installed', NOT_INSTALLED: 'not_installed' }, RunningState: { CANNOT_RUN: 'cannot_run', READY_TO_RUN: 'ready_to_run', RUNNING: 'running' } };
+      }
+
+      // Remove Electron giveaways from window
+      try { delete window.process; } catch(e) {}
+      try { delete window.require; } catch(e) {}
+      try { delete window.module; } catch(e) {}
+      try { delete window.exports; } catch(e) {}
+      try { delete window.Buffer; } catch(e) {}
+      try { delete window.__dirname; } catch(e) {}
+      try { delete window.__filename; } catch(e) {}
+      // Ensure process is truly gone
+      Object.defineProperty(window, 'process', { get: () => undefined, configurable: true });
+
+      // navigator.userAgentData — match real Chrome
+      if (!navigator.userAgentData) {
+        Object.defineProperty(navigator, 'userAgentData', {
+          get: () => ({
+            brands: [
+              { brand: 'Google Chrome', version: '131' },
+              { brand: 'Chromium', version: '131' },
+              { brand: 'Not_A Brand', version: '24' },
+            ],
+            mobile: false,
+            platform: 'macOS',
+            getHighEntropyValues: (hints) => Promise.resolve({
+              brands: [
+                { brand: 'Google Chrome', version: '131' },
+                { brand: 'Chromium', version: '131' },
+                { brand: 'Not_A Brand', version: '24' },
+              ],
+              mobile: false,
+              platform: 'macOS',
+              platformVersion: '15.3.0',
+              architecture: 'arm',
+              bitness: '64',
+              model: '',
+              uaFullVersion: '131.0.0.0',
+              fullVersionList: [
+                { brand: 'Google Chrome', version: '131.0.0.0' },
+                { brand: 'Chromium', version: '131.0.0.0' },
+                { brand: 'Not_A Brand', version: '24.0.0.0' },
+              ],
+            }),
+            toJSON: function() {
+              return { brands: this.brands, mobile: this.mobile, platform: this.platform };
+            },
+          }),
+          configurable: true,
+        });
       }
 
       // Permissions API
@@ -87,6 +157,16 @@ export class StealthManager {
             Promise.resolve({ state: Notification.permission }) :
             originalQuery(parameters)
         );
+      }
+
+      // Ensure window.Notification exists
+      if (!window.Notification) {
+        window.Notification = { permission: 'default' };
+      }
+
+      // ConnectionType for Network Information API
+      if (navigator.connection) {
+        // Already exists, fine
       }
     `;
   }

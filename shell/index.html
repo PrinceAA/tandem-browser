@@ -737,7 +737,9 @@
 
     (async () => {
       // The initial tab is created by the renderer, then registered with main
-      const initialUrl = 'https://duckduckgo.com';
+      // Determine newtab URL — use file:// path to shell/newtab.html
+      const shellPath = window.location.href.replace(/\/[^/]*$/, '');
+      const initialUrl = shellPath + '/newtab.html';
       const wv = document.createElement('webview');
       wv.setAttribute('src', initialUrl);
       wv.setAttribute('allowpopups', '');
@@ -751,14 +753,14 @@
       tabEl.innerHTML = `
         <span class="group-dot" style="display:none"></span>
         <img class="tab-favicon" src="" style="display:none">
-        <span class="tab-title">DuckDuckGo</span>
+        <span class="tab-title">Nieuwe Tab</span>
         <button class="tab-close" title="Sluit tab">✕</button>
       `;
       tabBar.insertBefore(tabEl, btnNewTab);
 
       wv.classList.add('active');
       activeTabId = '__initial';
-      urlBar.value = initialUrl;
+      urlBar.value = '';
 
       tabs.set('__initial', { webview: wv, tabEl });
 
@@ -1466,6 +1468,30 @@
     setInterval(pollChatMessages, 2000);
 
     // ═══════════════════════════════════════════════
+    // New tab page navigation messages
+    // ═══════════════════════════════════════════════
+    window.addEventListener('message', (e) => {
+      if (e.data && e.data.type === 'tandem-newtab-navigate' && e.data.url) {
+        const entry = tabs.get(activeTabId);
+        if (entry) entry.webview.loadURL(e.data.url);
+      }
+    });
+
+    // Clear URL bar when on newtab page
+    function isNewtabUrl(url) {
+      return url && (url.includes('newtab.html') || url.startsWith('file://') && url.endsWith('newtab.html'));
+    }
+
+    // Patch updateTabMeta to clear URL bar on newtab
+    const _prevUpdateTabMeta = updateTabMeta;
+    updateTabMeta = function(tabId, data) {
+      _prevUpdateTabMeta(tabId, data);
+      if (data.url && tabId === activeTabId && isNewtabUrl(data.url)) {
+        urlBar.value = '';
+      }
+    };
+
+    // ═══════════════════════════════════════════════
     // Screenshot preview with actual images in panel
     // ═══════════════════════════════════════════════
 
@@ -1479,10 +1505,17 @@
 
         const div = document.createElement('div');
         if (data.base64) {
+          const imgSrc = `data:image/png;base64,${data.base64}`;
           div.innerHTML = `
-            <img src="data:image/png;base64,${data.base64}" alt="${data.filename}" style="width:100%;border-radius:6px;border:1px solid rgba(255,255,255,0.08);cursor:pointer;margin-bottom:4px;">
+            <img src="${imgSrc}" alt="${data.filename}" style="width:100%;border-radius:6px;border:1px solid rgba(255,255,255,0.08);cursor:pointer;margin-bottom:4px;" title="Klik om te vergroten">
             <div class="ss-label">${data.filename}</div>
           `;
+          div.querySelector('img').addEventListener('click', () => {
+            const win = window.open('', '_blank', 'width=1200,height=800');
+            if (win) {
+              win.document.write(`<!DOCTYPE html><html><head><title>${data.filename}</title><style>body{margin:0;background:#111;display:flex;align-items:center;justify-content:center;min-height:100vh;}img{max-width:100%;max-height:100vh;}</style></head><body><img src="${imgSrc}"></body></html>`);
+            }
+          });
         } else {
           div.innerHTML = `<div class="ss-label">${data.filename}</div>`;
         }

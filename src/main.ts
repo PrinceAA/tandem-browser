@@ -142,7 +142,8 @@ async function startAPI(win: BrowserWindow): Promise<void> {
 
   // Tab management IPC for renderer shortcuts
   ipcMain.handle('tab-new', async () => {
-    return tabManager?.openTab('https://duckduckgo.com');
+    const newtabPath = `file://${path.join(__dirname, '..', 'shell', 'newtab.html')}`;
+    return tabManager?.openTab(newtabPath);
   });
 
   ipcMain.handle('tab-close', async (_event, tabId: string) => {
