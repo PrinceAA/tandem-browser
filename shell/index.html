@@ -81,6 +81,7 @@
       <div class="sidebar-panel" id="sidebar-panel">
         <div class="sidebar-panel-header">
           <span class="sidebar-panel-title" id="sidebar-panel-title"></span>
+          <button class="sidebar-panel-pin" id="sidebar-panel-pin" title="Pin panel">📌</button>
           <button class="sidebar-panel-close" id="sidebar-panel-close" title="Sluiten">✕</button>
         </div>
         <div class="sidebar-panel-content" id="sidebar-panel-content">
@@ -405,6 +406,7 @@
       const r = await fetch('http://localhost:8765/sidebar/config', { headers: { Authorization: `Bearer ${TOKEN}` } });
       const data = await r.json();
       config = data.config;
+      applyPinState(config.panelPinned || false);
       render();
     }
 
@@ -571,6 +573,18 @@
       });
     }
 
+    function applyPinState(pinned) {
+      const panel = document.getElementById('sidebar-panel');
+      const pinBtn = document.getElementById('sidebar-panel-pin');
+      if (pinned) {
+        panel.classList.add('pinned');
+        pinBtn && pinBtn.classList.add('active');
+      } else {
+        panel.classList.remove('pinned');
+        pinBtn && pinBtn.classList.remove('active');
+      }
+    }
+
     function init() {
       loadConfig();
 
@@ -579,6 +593,16 @@
         if (btn) activateItem(btn.dataset.id);
       });
       document.getElementById('sidebar-toggle-width').addEventListener('click', toggleState);
+
+      document.getElementById('sidebar-panel-pin').addEventListener('click', async () => {
+        config.panelPinned = !config.panelPinned;
+        applyPinState(config.panelPinned);
+        await fetch('http://localhost:8765/sidebar/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKEN}` },
+          body: JSON.stringify({ panelPinned: config.panelPinned })
+        });
+      });
 
       document.getElementById('sidebar-panel-close').addEventListener('click', () => {
         const panel = document.getElementById('sidebar-panel');

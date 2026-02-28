@@ -13,5 +13,6 @@ export interface SidebarItem {
 export interface SidebarConfig {
   state: SidebarState;
   activeItemId: string | null;
+  panelPinned: boolean;
   items: SidebarItem[];
 }

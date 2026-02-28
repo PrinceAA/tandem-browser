@@ -11,6 +11,7 @@ import type { SidebarConfig, SidebarItem, SidebarState } from './types';
 const DEFAULT_CONFIG: SidebarConfig = {
   state: 'narrow',
   activeItemId: null,
+  panelPinned: false,
   items: [
     // === SECTIE 1: Workspaces ===
     { id: 'workspaces', label: 'Workspaces',      icon: '', type: 'panel',   enabled: true, order: 0 },
