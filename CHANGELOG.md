@@ -2,6 +2,28 @@
 
 All notable changes to Tandem Browser will be documented in this file.
 
+## [v0.16.0] - 2026-02-28
+
+- feat: sidebar shell UI — icon strip, panel, narrow/wide/hidden, brand icons, Cmd+Shift+B
+
+Nieuwe bestanden: geen
+Aangepaste bestanden:
+- shell/index.html: sidebar HTML toegevoegd als eerste kind van .main-layout
+  - .sidebar container met .sidebar-strip (icon strip) en .sidebar-panel
+  - ocSidebar JS object: render, activateItem, toggleState, toggleVisibility, init
+  - Keyboard shortcut Cmd+Shift+B toggle hidden/narrow
+- shell/css/main.css: sidebar CSS toegevoegd
+  - 3 standen: hidden (0px) / narrow (48px) / wide (180px)
+  - Utility icons: outline Heroicons grijs
+  - Messenger icons: gekleurde brand SVG op gekleurde ronde achtergrond
+  - Active indicator: gekleurde rounded square achter actief icoon
+  - Separator lijn tussen utility en messenger blok
+
+Getest:
+- npx tsc: zero errors
+- npm start: sidebar zichtbaar, panel opent/sluit, shortcuts werken
+- npx vitest run: alle tests slagen
+
 ## [v0.15.4] - 2026-02-28
 
 - feat: sidebar shell UI — icon strip, panel, narrow/wide/hidden, brand icons, Cmd+Shift+B
