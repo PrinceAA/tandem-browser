@@ -481,6 +481,8 @@
           setPanelWidth(savedWidth);
         } else {
           panel.classList.remove('open');
+          panel.style.width = ''; // clear inline style so CSS animates to 0
+          panel.style.removeProperty('--panel-width');
         }
       }
 
