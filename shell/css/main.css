@@ -1080,22 +1080,23 @@
       display: flex;
       align-items: center;
       gap: 10px;
-      padding: 8px 4px;
+      padding: 10px 4px;
       border-radius: 8px;
       transition: background 0.15s;
     }
     .setup-item:hover { background: rgba(255,255,255,0.05); }
 
-    .setup-item-icon {
-      width: 28px;
-      height: 28px;
-      border-radius: 7px;
+    .setup-item-icon-sm {
+      width: 24px;
+      height: 24px;
+      border-radius: 5px;
       display: flex;
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
+      color: #aaa;
     }
-    .setup-item-icon svg { width: 16px; height: 16px; }
+    .setup-item-icon-sm svg { width: 14px; height: 14px; }
 
     .setup-item-label {
       flex: 1;
