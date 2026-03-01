@@ -2,6 +2,10 @@
 
 All notable changes to Tandem Browser will be documented in this file.
 
+## [v0.32.0] - 2026-03-01
+
+- feat: Pinboards — PinboardManager, REST API, sidebar panel, context menu (v0.32.0)
+
 ## [v0.31.0] - 2026-03-01
 
 - feat: SyncManager — cross-device tab/history/workspace sync via shared folder
