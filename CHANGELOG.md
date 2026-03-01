@@ -2,6 +2,10 @@
 
 All notable changes to Tandem Browser will be documented in this file.
 
+## [v0.25.1] - 2026-03-01
+
+- fix: replace native prompt/confirm with custom modal (Electron blocks native dialogs)
+
 ## [v0.25.0] - 2026-03-01
 
 - feat: workspace manager + sidebar UI with tab filtering
