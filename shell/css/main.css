@@ -2870,18 +2870,18 @@
   border: 1px solid #333;
   border-radius: 12px;
   padding: 6px 0;
-  min-width: 200px;
+  min-width: 220px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.5);
   font-size: 13px;
   color: #eee;
   user-select: none;
 }
 .tandem-ctx-menu-item {
-  padding: 8px 16px;
+  padding: 7px 14px;
   cursor: pointer;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
   transition: background 0.1s;
   position: relative;
   white-space: nowrap;
@@ -2892,7 +2892,18 @@
 .tandem-ctx-menu-item .ctx-arrow {
   font-size: 10px;
   color: #888;
-  margin-left: 12px;
+  margin-left: auto;
+}
+.tandem-ctx-menu-item .ctx-icon {
+  width: 16px;
+  height: 16px;
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+.tandem-ctx-separator {
+  height: 1px;
+  background: rgba(255,255,255,0.1);
+  margin: 4px 0;
 }
 .tandem-ctx-submenu {
   position: absolute;
@@ -2910,13 +2921,26 @@
   display: block;
 }
 .tandem-ctx-submenu-item {
-  padding: 8px 16px;
+  padding: 7px 14px;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   transition: background 0.1s;
   white-space: nowrap;
 }
 .tandem-ctx-submenu-item:hover {
   background: rgba(255,255,255,0.08);
+}
+.tandem-ctx-submenu-item .ws-ctx-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+.tandem-ctx-submenu-item .ws-ctx-icon svg {
+  width: 16px;
+  height: 16px;
+  color: #fff;
 }
 .tandem-ctx-submenu.flip-left {
   left: auto;

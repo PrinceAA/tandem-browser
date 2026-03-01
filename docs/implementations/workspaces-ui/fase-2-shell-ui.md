@@ -247,6 +247,7 @@ curl -H "Authorization: Bearer $TOKEN" \
 - [x] Opera-style icon picker: 24 SVG icons in 6-col grid (v0.26.0)
 - [x] Edit workspace: inline sheet with icon picker, rename, delete (v0.26.0)
 - [x] Data model migrated: emoji → icon slug (v0.26.0)
+- [x] Full Opera-style tab context menu: New Tab, Reload, Duplicate, Copy Address, Move to Workspace (with SVG icons), Mute/Unmute, Close Tab/Others/Right (v0.28.1)
 
 **Compilatie verificatie:**
 - [x] `npx tsc` — zero errors
