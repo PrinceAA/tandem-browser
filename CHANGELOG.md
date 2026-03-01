@@ -2,6 +2,10 @@
 
 All notable changes to Tandem Browser will be documented in this file.
 
+## [v0.34.0] - 2026-03-01
+
+- feat: OG metadata auto-fetch for thumbnails + masonry card layout fix (v0.33.1)
+
 ## [v0.33.0] - 2026-03-01
 
 - feat: add 'Add to Pinboard' to tab context menu with board submenu + pin-flash animation
