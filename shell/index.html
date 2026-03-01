@@ -1116,10 +1116,10 @@
             break;
           }
           case 'quote':
-            preview = `<div class="pb-card-text-preview">"${pbEscape((item.content || '').substring(0, 150))}"</div>`;
+            preview = `<div class="pb-card-text-preview">"${pbEscape(item.content || '')}"</div>`;
             break;
           case 'text':
-            preview = `<div class="pb-card-text-preview">${pbEscape((item.content || '').substring(0, 150))}</div>`;
+            preview = `<div class="pb-card-text-preview">${pbEscape(item.content || '')}</div>`;
             break;
           default:
             preview = `<span class="pb-card-type-icon">${typeIcons[item.type] || '📄'}</span>`;
@@ -1128,7 +1128,7 @@
         return `
           <div class="pb-card" draggable="true" data-item-id="${item.id}" ${item.url ? 'data-has-url="true"' : ''} data-url="${pbEscape(item.url || '')}">
             <button class="pb-card-delete" data-item-id="${item.id}" title="Delete">&times;</button>
-            <div class="pb-card-preview">${preview}</div>
+            <div class="pb-card-preview${(item.type === 'quote' || item.type === 'text') ? ' pb-card-preview--text' : ''}">${preview}</div>
             <div class="pb-card-info">
               <div class="pb-card-title">${title}</div>
               ${item.description ? `<div class="pb-card-desc">${pbEscape(item.description.substring(0, 120))}</div>` : ''}
