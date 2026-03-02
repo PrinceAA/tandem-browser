@@ -2,6 +2,18 @@
 
 All notable changes to Tandem Browser will be documented in this file.
 
+## [v0.44.1] - 2026-03-02
+
+- fix: About only via hamburger menu, no sidebar icon
+
+Changes:
+- Removed 'about' from sidebar config (no icon shown)
+- Hamburger menu → About Tandem Browser now calls renderAboutPanel() directly
+- Opens sidebar panel with frosted glass effect
+- No separate icon in sidebar needed
+
+About is now ONLY accessible via ☰ → Tandem → About Tandem Browser
+
 ## [v0.44.0] - 2026-03-02
 
 - feat: About as SIDEBAR PANEL with real frosted glass!
