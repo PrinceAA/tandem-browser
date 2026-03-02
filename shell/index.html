@@ -58,6 +58,23 @@
   <!-- Bookmarks bar -->
   <div class="bookmarks-bar" id="bookmarks-bar"></div>
 
+  <!-- Bookmark star popup (Chrome-style) -->
+  <div class="bookmark-popup" id="bookmark-popup" style="display:none;">
+    <div class="bookmark-popup-title">Bookmark</div>
+    <label class="bookmark-popup-label">Name
+      <input type="text" id="bookmark-popup-name" class="bookmark-popup-input" placeholder="Page title">
+    </label>
+    <label class="bookmark-popup-label">Folder
+      <select id="bookmark-popup-folder" class="bookmark-popup-select"></select>
+    </label>
+    <div class="bookmark-popup-actions">
+      <button id="bookmark-popup-delete" class="bookmark-popup-btn danger" style="display:none;">Remove</button>
+      <span class="bookmark-popup-spacer"></span>
+      <button id="bookmark-popup-cancel" class="bookmark-popup-btn">Cancel</button>
+      <button id="bookmark-popup-save" class="bookmark-popup-btn primary">Save</button>
+    </div>
+  </div>
+
   <!-- Main layout: browser + panel -->
   <div class="main-layout">
 

@@ -446,7 +446,7 @@
         } else if (action === 'open-settings') {
           openSettings();
         } else if (action === 'bookmark-page') {
-          toggleBookmarkCurrentPage();
+          openBookmarkPopup();
         } else if (action === 'toggle-bookmarks-bar') {
           toggleBookmarksBar();
         } else if (action === 'find-in-page') {
@@ -2154,6 +2154,8 @@
     const bookmarksBar = document.getElementById('bookmarks-bar');
     let bookmarksBarVisible = true;
 
+    const bmToken = () => window.__TANDEM_TOKEN__ || '';
+
     async function updateBookmarkStar() {
       const entry = tabs.get(activeTabId);
       if (!entry) return;
@@ -2164,7 +2166,9 @@
           bookmarkStar.classList.remove('bookmarked');
           return;
         }
-        const resp = await fetch(`http://localhost:8765/bookmarks/check?url=${encodeURIComponent(url)}`);
+        const resp = await fetch(`http://localhost:8765/bookmarks/check?url=${encodeURIComponent(url)}`, {
+          headers: { Authorization: `Bearer ${bmToken()}` }
+        });
         if (resp.ok) {
           const data = await resp.json();
           if (data.bookmarked) {
@@ -2178,41 +2182,156 @@
       } catch { /* API not ready */ }
     }
 
-    async function toggleBookmarkCurrentPage() {
-      const entry = tabs.get(activeTabId);
-      if (!entry) return;
-      try {
-        const url = entry.webview.getURL();
-        const title = entry.webview.getTitle() || url;
-        if (!url || url.startsWith('file://') || url === 'about:blank') return;
+    // === Bookmark star popup ===
+    const bmPopup = document.getElementById('bookmark-popup');
+    const bmPopupName = document.getElementById('bookmark-popup-name');
+    const bmPopupFolder = document.getElementById('bookmark-popup-folder');
+    const bmPopupDelete = document.getElementById('bookmark-popup-delete');
+    const bmPopupSave = document.getElementById('bookmark-popup-save');
+    const bmPopupCancel = document.getElementById('bookmark-popup-cancel');
+    let bmPopupState = { open: false, bookmarkId: null, url: null };
 
-        if (bookmarkStar.classList.contains('bookmarked')) {
-          // Remove bookmark
-          const checkResp = await fetch(`http://localhost:8765/bookmarks/check?url=${encodeURIComponent(url)}`);
-          if (checkResp.ok) {
-            const checkData = await checkResp.json();
-            if (checkData.bookmark) {
-              await fetch('http://localhost:8765/bookmarks/remove', {
-                method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: checkData.bookmark.id }),
-              });
+    async function loadFolderOptions() {
+      try {
+        const res = await fetch('http://localhost:8765/bookmarks', {
+          headers: { Authorization: `Bearer ${bmToken()}` }
+        });
+        const data = await res.json();
+        const root = data.bookmarks?.[0];
+        bmPopupFolder.innerHTML = '';
+        // Add root option (Bookmarks Bar)
+        const rootOpt = document.createElement('option');
+        rootOpt.value = root?.id || '';
+        rootOpt.textContent = 'Bookmarks Bar';
+        bmPopupFolder.appendChild(rootOpt);
+        // Recursively add folders
+        function addFolders(children, depth) {
+          if (!children) return;
+          for (const item of children) {
+            if (item.type === 'folder') {
+              const opt = document.createElement('option');
+              opt.value = item.id;
+              opt.textContent = '\u00A0\u00A0'.repeat(depth) + item.name;
+              bmPopupFolder.appendChild(opt);
+              addFolders(item.children, depth + 1);
             }
           }
-        } else {
-          // Add bookmark
-          await fetch('http://localhost:8765/bookmarks/add', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: title, url }),
-          });
         }
-        updateBookmarkStar();
-        loadBookmarksBar();
+        addFolders(root?.children, 1);
       } catch { /* ignore */ }
     }
 
-    bookmarkStar.addEventListener('click', toggleBookmarkCurrentPage);
+    function positionPopup() {
+      const starRect = bookmarkStar.getBoundingClientRect();
+      bmPopup.style.top = (starRect.bottom + 6) + 'px';
+      bmPopup.style.right = 'auto';
+      bmPopup.style.left = Math.max(8, starRect.left - 120) + 'px';
+    }
+
+    async function openBookmarkPopup() {
+      const entry = tabs.get(activeTabId);
+      if (!entry) return;
+      const url = entry.webview.getURL();
+      const title = entry.webview.getTitle() || url;
+      if (!url || url.startsWith('file://') || url === 'about:blank') return;
+
+      await loadFolderOptions();
+
+      // Check if already bookmarked
+      let existingBookmark = null;
+      try {
+        const resp = await fetch(`http://localhost:8765/bookmarks/check?url=${encodeURIComponent(url)}`, {
+          headers: { Authorization: `Bearer ${bmToken()}` }
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data.bookmarked && data.bookmark) existingBookmark = data.bookmark;
+        }
+      } catch { /* ignore */ }
+
+      bmPopupName.value = existingBookmark ? existingBookmark.name : title;
+      bmPopupState.bookmarkId = existingBookmark?.id || null;
+      bmPopupState.url = url;
+
+      // Select the bookmark's parent folder if editing
+      if (existingBookmark?.parentId) {
+        bmPopupFolder.value = existingBookmark.parentId;
+      } else {
+        bmPopupFolder.selectedIndex = 0;
+      }
+
+      bmPopupDelete.style.display = existingBookmark ? '' : 'none';
+      positionPopup();
+      bmPopup.style.display = 'flex';
+      bmPopupState.open = true;
+      bmPopupName.focus();
+      bmPopupName.select();
+    }
+
+    function closeBookmarkPopup() {
+      bmPopup.style.display = 'none';
+      bmPopupState.open = false;
+    }
+
+    bmPopupSave.addEventListener('click', async () => {
+      const name = bmPopupName.value.trim();
+      const parentId = bmPopupFolder.value;
+      if (!name) return;
+      try {
+        if (bmPopupState.bookmarkId) {
+          // Update existing bookmark
+          await fetch('http://localhost:8765/bookmarks/update', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${bmToken()}` },
+            body: JSON.stringify({ id: bmPopupState.bookmarkId, name, url: bmPopupState.url }),
+          });
+          // Move to selected folder if changed
+          await fetch('http://localhost:8765/bookmarks/move', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${bmToken()}` },
+            body: JSON.stringify({ id: bmPopupState.bookmarkId, parentId }),
+          });
+        } else {
+          // Add new bookmark
+          await fetch('http://localhost:8765/bookmarks/add', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${bmToken()}` },
+            body: JSON.stringify({ name, url: bmPopupState.url, parentId }),
+          });
+        }
+        closeBookmarkPopup();
+        updateBookmarkStar();
+        loadBookmarksBar();
+      } catch { /* ignore */ }
+    });
+
+    bmPopupDelete.addEventListener('click', async () => {
+      if (!bmPopupState.bookmarkId) return;
+      try {
+        await fetch('http://localhost:8765/bookmarks/remove', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${bmToken()}` },
+          body: JSON.stringify({ id: bmPopupState.bookmarkId }),
+        });
+        closeBookmarkPopup();
+        updateBookmarkStar();
+        loadBookmarksBar();
+      } catch { /* ignore */ }
+    });
+
+    bmPopupCancel.addEventListener('click', closeBookmarkPopup);
+
+    // Close popup on Escape or click outside
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && bmPopupState.open) closeBookmarkPopup();
+    });
+    document.addEventListener('mousedown', (e) => {
+      if (bmPopupState.open && !bmPopup.contains(e.target) && e.target !== bookmarkStar) {
+        closeBookmarkPopup();
+      }
+    });
+
+    bookmarkStar.addEventListener('click', openBookmarkPopup);
 
     function toggleBookmarksBar() {
       bookmarksBarVisible = !bookmarksBarVisible;
@@ -2463,7 +2582,9 @@
       let retries = 3;
       while (retries > 0) {
         try {
-          const resp = await fetch('http://localhost:8765/bookmarks');
+          const resp = await fetch('http://localhost:8765/bookmarks', {
+            headers: { Authorization: `Bearer ${bmToken()}` }
+          });
           if (!resp.ok) {
             retries--;
             if (retries > 0) { await new Promise(r => setTimeout(r, 1000)); continue; }
