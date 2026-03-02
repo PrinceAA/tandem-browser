@@ -423,7 +423,7 @@ export function registerIpcHandlers(deps: IpcDeps): void {
                 },
               });
               aboutWindow.setMenu(null);
-              void aboutWindow.loadFile(require('path').join(__dirname, '..', 'shell', 'about.html'));
+              void aboutWindow.loadFile(require('path').join(__dirname, '..', '..', 'shell', 'about.html'));
             },
           },
           { type: 'separator' },
