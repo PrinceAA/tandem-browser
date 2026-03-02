@@ -2909,6 +2909,113 @@
       padding: 24px 0;
     }
 
+    /* Bookmark panel toolbar */
+    .bm-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+    .bm-toolbar .bookmark-search-wrap {
+      flex: 1;
+      min-width: 0;
+    }
+    .bm-toolbar-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      background: rgba(255, 255, 255, 0.07);
+      color: #999;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: all 0.15s;
+    }
+    .bm-toolbar-btn:hover {
+      background: rgba(255, 255, 255, 0.12);
+      color: #fff;
+    }
+
+    /* Bookmark item action buttons (edit/delete on hover) */
+    .bm-actions {
+      display: none;
+      align-items: center;
+      gap: 2px;
+      flex-shrink: 0;
+      margin-left: auto;
+    }
+    .bm-item:hover .bm-actions { display: flex; }
+    .bm-item:hover .bm-chevron { display: none; }
+
+    .bm-action-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 5px;
+      border: none;
+      background: transparent;
+      color: #777;
+      cursor: pointer;
+      transition: all 0.12s;
+      padding: 0;
+    }
+    .bm-action-btn:hover { background: rgba(255, 255, 255, 0.10); color: #fff; }
+    .bm-delete-btn:hover { color: #f55; background: rgba(255, 68, 68, 0.15); }
+
+    /* Inline edit form */
+    .bm-item.editing {
+      padding: 6px 8px;
+      background: rgba(255, 255, 255, 0.04);
+    }
+    .bm-item.editing:hover { background: rgba(255, 255, 255, 0.04); }
+    .bm-edit-form {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      width: 100%;
+    }
+    .bm-edit-input {
+      width: 100%;
+      box-sizing: border-box;
+      background: rgba(255, 255, 255, 0.07);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 6px;
+      padding: 5px 8px;
+      color: #fff;
+      font-size: 12px;
+      outline: none;
+    }
+    .bm-edit-input:focus { border-color: rgba(255, 255, 255, 0.25); }
+    .bm-edit-input::placeholder { color: #666; }
+    .bm-edit-actions {
+      display: flex;
+      gap: 6px;
+      justify-content: flex-end;
+    }
+    .bm-edit-save, .bm-edit-cancel {
+      padding: 4px 12px;
+      border-radius: 5px;
+      font-size: 11px;
+      border: none;
+      cursor: pointer;
+      transition: all 0.12s;
+    }
+    .bm-edit-save {
+      background: var(--accent);
+      color: #fff;
+    }
+    .bm-edit-save:hover { filter: brightness(1.15); }
+    .bm-edit-cancel {
+      background: rgba(255, 255, 255, 0.07);
+      color: #ccc;
+    }
+    .bm-edit-cancel:hover { background: rgba(255, 255, 255, 0.12); }
+
     /* ── History Panel ── */
     .history-panel {
       display: flex;
