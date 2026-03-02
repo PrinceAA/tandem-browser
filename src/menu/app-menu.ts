@@ -49,7 +49,7 @@ export function buildAppMenu(deps: MenuDeps): void {
             });
             aboutWindow.setMenu(null);
             // Open external links in system browser
-            aboutWindow.webContents.setWindowOpenHandler(({ url }) => {
+            aboutWindow.webContents.setWindowOpenHandler(({ url }: { url: string }) => {
               require('electron').shell.openExternal(url);
               return { action: 'deny' };
             });
