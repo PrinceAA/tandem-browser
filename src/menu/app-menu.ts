@@ -38,6 +38,7 @@ export function buildAppMenu(deps: MenuDeps): void {
               height: 650,
               modal: true,
               parent: deps.mainWindow || undefined,
+              frame: process.platform === 'linux' ? false : true,
               resizable: false,
               maximizable: false,
               minimizable: false,
@@ -47,6 +48,11 @@ export function buildAppMenu(deps: MenuDeps): void {
               },
             });
             aboutWindow.setMenu(null);
+            // Open external links in system browser
+            aboutWindow.webContents.setWindowOpenHandler(({ url }) => {
+              require('electron').shell.openExternal(url);
+              return { action: 'deny' };
+            });
             void aboutWindow.loadFile(path.join(__dirname, '..', '..', 'shell', 'about.html'));
           },
         },
