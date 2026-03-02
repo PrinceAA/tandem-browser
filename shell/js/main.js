@@ -496,9 +496,6 @@
       });
 
       // Open URL in new tab (from About window links)
-      window.tandem.onOpenUrlInNewTab?.((url) => {
-        window.tandem.newTab(url);
-      });
 
     }
 
