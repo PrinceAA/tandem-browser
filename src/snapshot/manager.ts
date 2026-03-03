@@ -632,7 +632,7 @@ export class SnapshotManager {
   private gaussian(min: number, max: number): number {
     const mean = (min + max) / 2;
     const stddev = (max - min) / 4;
-    const u1 = Math.random();
+    const u1 = Math.max(Number.EPSILON, Math.random()); // guard against log(0)
     const u2 = Math.random();
     const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
     return Math.max(min, Math.min(max, Math.round(mean + z * stddev)));
