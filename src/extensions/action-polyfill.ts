@@ -264,18 +264,33 @@ export class ActionPolyfill {
         const polyfillCode = generatePolyfillScript(cwsId, this.apiPort);
         const marker = '/* Tandem chrome.action polyfill v4';
 
-        const existing = fs.readFileSync(swPath, 'utf-8');
+        let existing = fs.readFileSync(swPath, 'utf-8');
 
-        // Skip if already patched
-        if (existing.includes(marker)) {
-          patched.push(cwsId);
-          continue;
+        // Skip polyfill prepend if already patched with current version
+        if (!existing.includes(marker)) {
+          existing = polyfillCode + '\n' + existing;
+          log.info(`🎯 Action polyfill injected into ${manifest.name || cwsId}`);
         }
 
-        // Prepend polyfill to the service worker
-        fs.writeFileSync(swPath, polyfillCode + '\n' + existing, 'utf-8');
+        // --- Direct string patches (independent of var-shadow approach) ---
+        // These guard against chrome.* APIs that are undefined in Electron's
+        // extension service worker context. Applied regardless of polyfill state.
+        // Electron injects chrome as a V8-native sealed object; we cannot shadow
+        // it via module-level var declarations. Direct patching is the only
+        // reliable fix.
+
+        // Patch 1: chrome.notifications.onClicked — crashes at SW startup because
+        //   Fj()||(chrome.notifications.onClicked.addListener(...))
+        // runs unconditionally (Fj()=false in Chrome/Electron context).
+        const notifPattern = 'Fj()||(chrome.notifications.onClicked.addListener(';
+        const notifGuard   = 'Fj()||!chrome.notifications||(chrome.notifications.onClicked.addListener(';
+        if (existing.includes(notifPattern) && !existing.includes(notifGuard)) {
+          existing = existing.replace(notifPattern, notifGuard);
+          log.info(`🩹 Patched chrome.notifications guard for ${manifest.name || cwsId}`);
+        }
+
+        fs.writeFileSync(swPath, existing, 'utf-8');
         patched.push(cwsId);
-        log.info(`🎯 Action polyfill injected into ${manifest.name || cwsId}`);
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         log.warn(`⚠️ Failed to inject action polyfill for ${dir.name}: ${msg}`);
