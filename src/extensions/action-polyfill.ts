@@ -660,19 +660,13 @@ export class ActionPolyfill {
           log.info(`🩹 Patched Dre catch (error telemetry) for ${manifest.name || cwsId}`);
         }
 
-        // Bte: wrap entire Bte body in try/catch that logs the real error
-        // Original: async function Bte(){let A=mte(),...
-        // Patched:  async function Bte(){try{let A=mte(),... [rest]} catch(_bte){POST to log; return default config}}
-        // This is a structural patch — we wrap the ENTIRE existing body.
-        // We find the opening of Bte and add try-catch around its contents.
-        const bteFuncMarker = 'async function Bte(){let A=mte()';
-        const bteWrapped    = 'async function Bte(){try{let A=mte()';
-        const bteEndOrig    = '};function mo('; // function right after Bte (mo)
-        const bteEndPatch   = '}catch(_bte){try{fetch("http://127.0.0.1:"+TANDEM_PORT+"/extensions/log",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({source:"Bte-catch",msg:_bte?.message||String(_bte),stack:(_bte?.stack||"").slice(0,500)})});}catch{}throw _bte;}};function mo(';
-        if (existing.includes(bteFuncMarker) && !existing.includes(bteWrapped) && existing.includes(bteEndOrig)) {
-          existing = existing.replace(bteFuncMarker, bteWrapped);
-          existing = existing.replace(bteEndOrig, bteEndPatch);
-          log.info(`🩹 Patched Bte catch (error telemetry) for ${manifest.name || cwsId}`);
+        // Bte: wrap registration P("get-settings-configuration",Bte) with a logging wrapper.
+        // Replaces the handler registration so exceptions POST to /extensions/log before rethrowing.
+        const bteRegOrig  = 'P("get-settings-configuration",Bte)';
+        const bteRegPatch = 'P("get-settings-configuration",async function(..._bteA){try{return await Bte(..._bteA)}catch(_bte){try{fetch("http://127.0.0.1:"+TANDEM_PORT+"/extensions/log",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({source:"Bte-catch",msg:_bte?.message||String(_bte),stack:(_bte?.stack||"").slice(0,500)})});}catch{}throw _bte;}})';
+        if (existing.includes(bteRegOrig) && !existing.includes(bteRegPatch)) {
+          existing = existing.replace(bteRegOrig, bteRegPatch);
+          log.info(`🩹 Patched Bte registration (error telemetry) for ${manifest.name || cwsId}`);
         }
 
         fs.writeFileSync(swPath, existing, 'utf-8');
