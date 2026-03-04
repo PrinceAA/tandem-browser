@@ -267,16 +267,19 @@ export class ActionPolyfill {
 
         let existing = fs.readFileSync(swPath, 'utf-8');
 
-        // Strip any previous version of the Tandem polyfill before checking/injecting.
-        // This ensures changes to notifyToolbar or other polyfill internals take effect
-        // on every Tandem version bump, even if the file was already patched.
-        if (existing.includes(POLYFILL_START_PREFIX) && existing.includes(POLYFILL_END_MARKER)) {
-          const startIdx = existing.indexOf(POLYFILL_START_PREFIX);
-          const endIdx   = existing.indexOf(POLYFILL_END_MARKER) + POLYFILL_END_MARKER.length;
-          // Strip old polyfill (plus any trailing newline)
-          const afterEnd = existing.slice(endIdx);
-          existing = existing.slice(0, startIdx) + afterEnd.replace(/^\n/, '');
-          log.info(`[ActionPolyfill] Stripped old polyfill from ${manifest.name || cwsId}`);
+        // Strip ALL previous versions of the Tandem polyfill (any version, with or
+        // without end marker). Old copies accumulate when the file is patched across
+        // multiple runs if the end marker was not present in older versions.
+        //
+        // Strategy: use a regex anchored to the unique module-scope var declaration
+        // that appears at the end of EVERY polyfill version:
+        //   var chrome; var browser; // jshint ignore:line
+        // This line does not appear anywhere in the 1Password bundle.
+        const polyfillBlockRe = /\/\* Tandem chrome\.action polyfill v[\s\S]*?var chrome; var browser; \/\/ jshint ignore:line\n(?:\/\* Tandem:polyfill:end \*\/\n)?/g;
+        const strippedCount = (existing.match(polyfillBlockRe) || []).length;
+        if (strippedCount > 0) {
+          existing = existing.replace(polyfillBlockRe, '');
+          log.info(`[ActionPolyfill] Stripped ${strippedCount} old polyfill block(s) from ${manifest.name || cwsId}`);
         }
 
         // Prepend new polyfill if current version marker not present
@@ -377,7 +380,20 @@ export class ActionPolyfill {
           log.info(`🩹 Patched chrome.contextMenus.onClicked for ${manifest.name || cwsId}`);
         }
 
-        // Patch 6: chrome.webNavigation — module-level event listener registration at SW
+        // Patch 6: Uce() async initialization block — multiple undefined API accesses.
+        // chrome.webNavigation is absent in Electron; chrome.windows.onFocusChanged /
+        // onCreated are not implemented. NOTE: Fj() in this minified scope is NOT the
+        // Fj=()=>!1 seen elsewhere — variable names are reused across module IIFEs.
+        // Fj() here may return true (Chrome/MV3 context), causing the windows branch to run.
+        // Patch ALL potentially-undefined API calls in this block with optional chaining.
+        const uceNavPattern = 'chrome.webNavigation.onCommitted.addListener(n0j),chrome.tabs.onRemoved.addListener(i0j),Fj()?(chrome.windows.onFocusChanged.addListener(j0j),chrome.windows.onCreated.addListener(t0j),chrome.tabs.onCreated.addListener(r0j)):chrome.webNavigation.onCreatedNavigationTarget.addListener(o0j)';
+        const uceNavPatch   = 'chrome.webNavigation?.onCommitted?.addListener(n0j),chrome.tabs.onRemoved.addListener(i0j),Fj()?(chrome.windows?.onFocusChanged?.addListener(j0j),chrome.windows?.onCreated?.addListener(t0j),chrome.tabs.onCreated.addListener(r0j)):chrome.webNavigation?.onCreatedNavigationTarget?.addListener(o0j)';
+        if (existing.includes(uceNavPattern) && !existing.includes(uceNavPatch)) {
+          existing = existing.replace(uceNavPattern, uceNavPatch);
+          log.info(`🩹 Patched Uce() webNavigation/windows block for ${manifest.name || cwsId}`);
+        }
+
+        // Patch 7: chrome.webNavigation — module-level event listener registration at SW
         // startup crashes because chrome.webNavigation is undefined in Electron (the
         // 'webNavigation' permission is listed as unknown at extension load time).
         // Only the two module-init calls are patched; all other webNavigation uses are inside
