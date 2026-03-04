@@ -41,7 +41,7 @@ function generatePolyfillScript(cwsId: string, apiPort: number): string {
   //   3. Rest of the module runs with chrome/browser = our proxy
   //   4. proxy.get('action') → returns our polyfill object
   return `
-/* Tandem chrome.action polyfill v5 — module-scope var shadow */
+/* Tandem chrome.action polyfill v6 — module-scope var shadow */
 ;(function() {
   var __tc = (typeof globalThis !== 'undefined' && globalThis.chrome) || (typeof self !== 'undefined' && self.chrome) || {};
   var CWS_ID = '${cwsId}';
@@ -166,15 +166,98 @@ function generatePolyfillScript(cwsId: string, apiPort: number): string {
         update:  function(id, opts, cb) { if (typeof cb === 'function') cb(false); return Promise.resolve(false); }
       };
 
+  /*
+   * Native Messaging Proxy
+   *
+   * Electron 40 does not support chrome.runtime.connectNative() or
+   * chrome.runtime.sendNativeMessage() for extensions loaded via
+   * session.extensions.loadExtension(). We proxy these calls through
+   * Tandem's local HTTP/WebSocket API instead.
+   *
+   * The extension's manifest.json has been patched (at startup, before
+   * session.extensions.loadExtension()) to add http://127.0.0.1:${API_PORT}
+   * and ws://127.0.0.1:${API_PORT} to connect-src, so these fetches are
+   * allowed by the extension's CSP.
+   */
+  var NM_HTTP = 'http://127.0.0.1:' + API_PORT + '/extensions/native-message';
+  var NM_WS   = 'ws://127.0.0.1:' + API_PORT + '/extensions/native-message/ws';
+
+  function __nmSendNativeMessage(host, message, callback) {
+    fetch(NM_HTTP, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ host: host, message: message })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(resp) { if (typeof callback === 'function') callback(resp); })
+    .catch(function() { if (typeof callback === 'function') callback(undefined); });
+  }
+
+  function __nmConnectNative(host) {
+    var extensionId = (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id) ? chrome.runtime.id : CWS_ID;
+    var ws = new WebSocket(NM_WS + '?host=' + encodeURIComponent(host) + '&extensionId=' + encodeURIComponent(extensionId));
+    var msgListeners = [];
+    var disconnectListeners = [];
+    var port = {
+      name: host,
+      onMessage: {
+        addListener: function(fn) { if (typeof fn === 'function' && msgListeners.indexOf(fn) < 0) msgListeners.push(fn); },
+        removeListener: function(fn) { msgListeners = msgListeners.filter(function(l) { return l !== fn; }); },
+        hasListener: function(fn) { return msgListeners.indexOf(fn) >= 0; }
+      },
+      onDisconnect: {
+        addListener: function(fn) { if (typeof fn === 'function') disconnectListeners.push(fn); },
+        removeListener: function(fn) { disconnectListeners = disconnectListeners.filter(function(l) { return l !== fn; }); },
+        hasListener: function(fn) { return disconnectListeners.indexOf(fn) >= 0; }
+      },
+      postMessage: function(msg) {
+        if (ws.readyState === 1 /* OPEN */) {
+          try { ws.send(JSON.stringify(msg)); } catch(_e) {}
+        }
+      },
+      disconnect: function() { try { ws.close(); } catch(_e) {} }
+    };
+    ws.onmessage = function(e) {
+      try {
+        var msg = JSON.parse(e.data);
+        var ls = msgListeners.slice();
+        for (var i = 0; i < ls.length; i++) { try { ls[i](msg); } catch(_e) {} }
+      } catch(_e) {}
+    };
+    ws.onclose = function() {
+      var ls = disconnectListeners.slice();
+      for (var i = 0; i < ls.length; i++) { try { ls[i](port); } catch(_e) {} }
+    };
+    ws.onerror = function() { try { ws.close(); } catch(_e) {} };
+    return port;
+  }
+
+  /* Runtime proxy: intercept connectNative + sendNativeMessage */
+  var __tc_runtime = __tc.runtime;
+  var runtimeProxy = __tc_runtime
+    ? new Proxy(__tc_runtime, {
+        get: function(t, k) {
+          if (k === 'sendNativeMessage') return __nmSendNativeMessage;
+          if (k === 'connectNative')     return __nmConnectNative;
+          var v = t[k];
+          return (typeof v === 'function') ? v.bind(t) : v;
+        },
+        set: function(t, k, v) { t[k] = v; return true; }
+      })
+    : undefined;
+
   /* Build a proxy that returns stubs for missing APIs, forwards the rest */
   var proxy = new Proxy(__tc, {
     get: function(target, prop) {
-      if (prop === 'action') return actionObj;
-      if (prop === 'notifications') return notificationsObj;
+      if (prop === 'action')         return actionObj;
+      if (prop === 'notifications')  return notificationsObj;
+      if (prop === 'runtime' && runtimeProxy) return runtimeProxy;
       var val = target[prop];
       return (typeof val === 'function') ? val.bind(target) : val;
     },
-    has: function(target, prop) { return prop === 'action' || prop === 'notifications' || (prop in target); }
+    has: function(target, prop) {
+      return prop === 'action' || prop === 'notifications' || prop === 'runtime' || (prop in target);
+    }
   });
 
   /*
@@ -184,7 +267,7 @@ function generatePolyfillScript(cwsId: string, apiPort: number): string {
    */
   chrome = proxy;
   try { browser = proxy; } catch(e) {}
-  console.log('[Tandem] chrome.action polyfill v5 active for ${cwsId}');
+  console.log('[Tandem] chrome.action polyfill v6 active for ${cwsId}');
 })();
 /* Module-scope declarations — hoisted above the IIFE, shadow the globals */
 /* eslint-disable no-var */
@@ -263,7 +346,7 @@ export class ActionPolyfill {
         const polyfillCode = generatePolyfillScript(cwsId, this.apiPort);
         const POLYFILL_START_PREFIX = '/* Tandem chrome.action polyfill v';
         const POLYFILL_END_MARKER  = '/* Tandem:polyfill:end */';
-        const marker = '/* Tandem chrome.action polyfill v5';
+        const marker = '/* Tandem chrome.action polyfill v6';
 
         let existing = fs.readFileSync(swPath, 'utf-8');
 

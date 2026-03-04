@@ -90,6 +90,16 @@ export class ExtensionLoader {
       return existing;
     }
 
+    // Patch manifest CSP to allow connections to Tandem API (http+ws on port 8765).
+    // This is required for the native messaging proxy polyfill (chrome.runtime.connectNative
+    // / sendNativeMessage) to reach http://127.0.0.1:8765 from the extension service worker.
+    try {
+      const { nmProxy } = await import('./nm-proxy');
+      nmProxy.patchManifestCSP(manifestPath);
+    } catch (_e) {
+      // Non-fatal — extension will still load, but native messaging proxy won't work
+    }
+
     const ext = await ses.loadExtension(extPath, { allowFileAccess: true });
 
     const loaded: LoadedExtension = {

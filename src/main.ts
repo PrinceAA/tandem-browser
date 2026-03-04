@@ -543,12 +543,15 @@ async function startAPI(win: BrowserWindow): Promise<void> {
   await api.start();
   log.info(`🧠 Tandem API running on http://localhost:${API_PORT}`);
 
-  // Phase 4: Wire GatekeeperWebSocket onto the running HTTP server
-  if (securityManager) {
-    const httpServer = api.getHttpServer();
-    if (httpServer) {
+  // Phase 4: Wire GatekeeperWebSocket + NM proxy WebSocket onto the running HTTP server
+  const httpServer = api.getHttpServer();
+  if (httpServer) {
+    if (securityManager) {
       securityManager.initGatekeeper(httpServer);
     }
+    // Start native messaging proxy WebSocket (Electron 40 workaround)
+    const { nmProxy: _nmProxyMain } = await import('./extensions/nm-proxy');
+    _nmProxyMain.startWebSocket(httpServer);
   }
 
   // Register all IPC handlers from extracted module

@@ -27,6 +27,7 @@ import { registerWorkspaceRoutes } from './routes/workspaces';
 import { registerSyncRoutes } from './routes/sync';
 import { registerPinboardRoutes } from './routes/pinboards';
 import { registerSecurityRoutes } from '../security/routes';
+import { nmProxy } from '../extensions/nm-proxy';
 import { createLogger } from '../utils/logger';
 
 const log = createLogger('TandemAPI');
@@ -166,6 +167,10 @@ export class TandemAPI {
     registerWorkspaceRoutes(router, ctx);
     registerSyncRoutes(router, ctx);
     registerPinboardRoutes(router, ctx);
+
+    // Native messaging proxy: route extension connectNative/sendNativeMessage
+    // through Tandem's API since Electron 40 doesn't support them natively.
+    nmProxy.registerRoutes(router);
   }
 
   async start(): Promise<void> {
