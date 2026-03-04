@@ -336,7 +336,17 @@ export class ActionPolyfill {
           log.info(`🩹 Patched browser.commands.onCommand for ${manifest.name || cwsId}`);
         }
 
-        // Patch 5: chrome.webNavigation — module-level event listener registration at SW
+        // Patch 5: chrome.contextMenus.onClicked — class constructor called at module-level
+        // instantiation. chrome.contextMenus is undefined in Electron.
+        // Anchored to the unique single occurrence of contextMenus.onClicked in background.js.
+        const ctxMenuPattern = 'chrome.contextMenus.onClicked.addListener(this.onClick)';
+        const ctxMenuPatch   = 'chrome.contextMenus?.onClicked?.addListener(this.onClick)';
+        if (existing.includes(ctxMenuPattern) && !existing.includes(ctxMenuPatch)) {
+          existing = existing.replace(ctxMenuPattern, ctxMenuPatch);
+          log.info(`🩹 Patched chrome.contextMenus.onClicked for ${manifest.name || cwsId}`);
+        }
+
+        // Patch 6: chrome.webNavigation — module-level event listener registration at SW
         // startup crashes because chrome.webNavigation is undefined in Electron (the
         // 'webNavigation' permission is listed as unknown at extension load time).
         // Only the two module-init calls are patched; all other webNavigation uses are inside
