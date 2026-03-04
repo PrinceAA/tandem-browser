@@ -7,6 +7,7 @@ import { CrxDownloader } from './crx-downloader';
 import type { NativeMessagingStatus } from './native-messaging';
 import { NativeMessagingSetup } from './native-messaging';
 import { IdentityPolyfill } from './identity-polyfill';
+import { ActionPolyfill } from './action-polyfill';
 import type { UpdateCheckResult, UpdateResult, UpdateState, InstalledExtension } from './update-checker';
 import { UpdateChecker } from './update-checker';
 import type { ExtensionConflict } from './conflict-detector';
@@ -42,6 +43,7 @@ export class ExtensionManager {
   private downloader: CrxDownloader;
   private nativeMessaging: NativeMessagingSetup;
   private identityPolyfill: IdentityPolyfill;
+  private actionPolyfill: ActionPolyfill;
   private updateChecker: UpdateChecker;
   private conflictDetector: ConflictDetector;
 
@@ -50,6 +52,7 @@ export class ExtensionManager {
     this.downloader = new CrxDownloader();
     this.nativeMessaging = new NativeMessagingSetup();
     this.identityPolyfill = new IdentityPolyfill(apiPort);
+    this.actionPolyfill = new ActionPolyfill(apiPort);
     this.updateChecker = new UpdateChecker(this.downloader, this.loader);
     this.conflictDetector = new ConflictDetector();
   }
@@ -59,6 +62,14 @@ export class ExtensionManager {
    * Called once at app startup.
    */
   async init(session: Session): Promise<void> {
+    // Inject chrome.action polyfill into MV3 extensions (before loading)
+    // Electron does not implement chrome.action; without this, MV3 extensions crash
+    // with "Cannot read properties of undefined (reading 'onClicked')"
+    const patchedAction = this.actionPolyfill.injectPolyfills();
+    if (patchedAction.length > 0) {
+      log.info(`🎯 Action polyfill injected into ${patchedAction.length} extension(s)`);
+    }
+
     // Inject chrome.identity polyfill into extensions that need it (before loading)
     const patchedExtensions = this.identityPolyfill.injectPolyfills();
     if (patchedExtensions.length > 0) {
