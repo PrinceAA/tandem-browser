@@ -41,7 +41,7 @@ function generatePolyfillScript(cwsId: string, apiPort: number): string {
   //   3. Rest of the module runs with chrome/browser = our proxy
   //   4. proxy.get('action') → returns our polyfill object
   return `
-/* Tandem chrome.action polyfill v4 — module-scope var shadow */
+/* Tandem chrome.action polyfill v5 — module-scope var shadow */
 ;(function() {
   var __tc = (typeof globalThis !== 'undefined' && globalThis.chrome) || (typeof self !== 'undefined' && self.chrome) || {};
   var CWS_ID = '${cwsId}';
@@ -184,11 +184,12 @@ function generatePolyfillScript(cwsId: string, apiPort: number): string {
    */
   chrome = proxy;
   try { browser = proxy; } catch(e) {}
-  console.log('[Tandem] chrome.action polyfill v3 active for ${cwsId}');
+  console.log('[Tandem] chrome.action polyfill v5 active for ${cwsId}');
 })();
 /* Module-scope declarations — hoisted above the IIFE, shadow the globals */
 /* eslint-disable no-var */
 var chrome; var browser; // jshint ignore:line
+/* Tandem:polyfill:end */
 `;
 }
 
@@ -260,11 +261,25 @@ export class ActionPolyfill {
 
         const cwsId = dir.name;
         const polyfillCode = generatePolyfillScript(cwsId, this.apiPort);
-        const marker = '/* Tandem chrome.action polyfill v4';
+        const POLYFILL_START_PREFIX = '/* Tandem chrome.action polyfill v';
+        const POLYFILL_END_MARKER  = '/* Tandem:polyfill:end */';
+        const marker = '/* Tandem chrome.action polyfill v5';
 
         let existing = fs.readFileSync(swPath, 'utf-8');
 
-        // Skip polyfill prepend if already patched with current version
+        // Strip any previous version of the Tandem polyfill before checking/injecting.
+        // This ensures changes to notifyToolbar or other polyfill internals take effect
+        // on every Tandem version bump, even if the file was already patched.
+        if (existing.includes(POLYFILL_START_PREFIX) && existing.includes(POLYFILL_END_MARKER)) {
+          const startIdx = existing.indexOf(POLYFILL_START_PREFIX);
+          const endIdx   = existing.indexOf(POLYFILL_END_MARKER) + POLYFILL_END_MARKER.length;
+          // Strip old polyfill (plus any trailing newline)
+          const afterEnd = existing.slice(endIdx);
+          existing = existing.slice(0, startIdx) + afterEnd.replace(/^\n/, '');
+          log.info(`[ActionPolyfill] Stripped old polyfill from ${manifest.name || cwsId}`);
+        }
+
+        // Prepend new polyfill if current version marker not present
         if (!existing.includes(marker)) {
           existing = polyfillCode + '\n' + existing;
           log.info(`🎯 Action polyfill injected into ${manifest.name || cwsId}`);
