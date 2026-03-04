@@ -203,10 +203,38 @@ export class NativeMessagingSetup {
           this.apiSupported = true;
           log.info(`🔌 Native messaging: configured directory ${dir.path}`);
         } else if (!apiChecked) {
-          // API not available — log once
+          // API not available — log once, and dump available native-messaging-related session properties
           apiChecked = true;
           log.info('🔌 Native messaging: session.setNativeMessagingHostDirectory() not available in Electron 40');
           log.info('   Manifests mirrored to Tandem Browser/NativeMessagingHosts/ for Chromium auto-discovery');
+          // Debug: find any native/messaging-related properties on session
+          try {
+            const allKeys: string[] = [];
+            let obj: object | null = ses;
+            while (obj && obj !== Object.prototype) {
+              allKeys.push(...Object.getOwnPropertyNames(obj));
+              obj = Object.getPrototypeOf(obj) as object | null;
+            }
+            const interesting = allKeys.filter(k =>
+              /native|messaging|host|extension/i.test(k)
+            );
+            log.info(`🔌 Session props matching native/messaging/host/extension: ${interesting.join(', ')}`);
+            // Also check ses.extensions sub-object
+            if (ses.extensions && typeof ses.extensions === 'object') {
+              const extKeys: string[] = [];
+              let eObj: object | null = ses.extensions as object;
+              while (eObj && eObj !== Object.prototype) {
+                extKeys.push(...Object.getOwnPropertyNames(eObj));
+                eObj = Object.getPrototypeOf(eObj) as object | null;
+              }
+              const extInteresting = extKeys.filter(k =>
+                /native|messaging|host|extension|load/i.test(k)
+              );
+              log.info(`🔌 session.extensions props: ${extInteresting.join(', ')}`);
+            }
+          } catch (_e) {
+            log.info('🔌 Could not enumerate session properties');
+          }
         }
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
