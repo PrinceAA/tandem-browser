@@ -605,6 +605,23 @@ export class ActionPolyfill {
           log.info(`🩹 Patched P$() active tab query for ${manifest.name || cwsId}`);
         }
 
+        // Patch 10: browser.webNavigation.getAllFrames / chrome.webNavigation.getAllFrames
+        // chrome.webNavigation is undefined in Electron (listed as unknown permission).
+        // Called inside av() and R3.getAllFrames() to enumerate page frames for autofill.
+        // Guard both call sites so they return an empty array instead of throwing.
+        const wnavP1orig = 'browser.webNavigation.getAllFrames({tabId:A}).then(e=>e??[]).then(e=>e.filter(({url:j})=>{try{return Dx(new URL(j))}catch{return!1}}))';
+        const wnavP1patch = '(browser.webNavigation?.getAllFrames?.({tabId:A})??Promise.resolve([])).then(e=>e??[]).then(e=>e.filter(({url:j})=>{try{return Dx(new URL(j))}catch{return!1}}))';
+        if (existing.includes(wnavP1orig) && !existing.includes(wnavP1patch)) {
+          existing = existing.replace(wnavP1orig, wnavP1patch);
+          log.info(`🩹 Patched browser.webNavigation.getAllFrames (av) for ${manifest.name || cwsId}`);
+        }
+        const wnavP2orig = 'chrome.webNavigation.getAllFrames({tabId:this.tabId},t=>{t?e(t):j("Frames no longer exists")})';
+        const wnavP2patch = 'chrome.webNavigation?.getAllFrames?.({tabId:this.tabId},t=>{t?e(t):j("Frames no longer exists")})||j([])';
+        if (existing.includes(wnavP2orig) && !existing.includes(wnavP2patch)) {
+          existing = existing.replace(wnavP2orig, wnavP2patch);
+          log.info(`🩹 Patched chrome.webNavigation.getAllFrames (R3) for ${manifest.name || cwsId}`);
+        }
+
         // Patch 8: browser.windows.create({type:'popup'}) — the extension opens its own
         // popup/index.html in "detached" mode via a popup window. Electron creates the
         // window but immediately closes it (popup windows flash and disappear).
