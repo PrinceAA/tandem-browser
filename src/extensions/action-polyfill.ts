@@ -356,11 +356,23 @@ export class ActionPolyfill {
         // initialization. chrome.windows is entirely absent in Electron.
         // Also patches chrome.windows.getCurrent in Uce() which uses chrome.windows.WINDOW_ID_NONE
         // directly (not via the already-patched Hce var).
-        const winFocusPattern = 'chrome.windows.onFocusChanged.addListener(this.onBrowserWindowFocusChange.bind(this))';
-        const winFocusPatch   = 'chrome.windows?.onFocusChanged?.addListener(this.onBrowserWindowFocusChange.bind(this))';
-        if (existing.includes(winFocusPattern) && !existing.includes(winFocusPatch)) {
-          existing = existing.replace(winFocusPattern, winFocusPatch);
-          log.info(`🩹 Patched chrome.windows.onFocusChanged for ${manifest.name || cwsId}`);
+        // Use try-catch instead of optional chaining: Electron's chrome.windows object
+        // may throw (not return undefined) when .onFocusChanged is accessed, because
+        // the V8 native binding Proxy can throw for unsupported properties.
+        // optional chaining (?) does NOT prevent throws from property getters.
+        const winFocusOrig     = 'chrome.windows.onFocusChanged.addListener(this.onBrowserWindowFocusChange.bind(this))';
+        const winFocusOptional = 'chrome.windows?.onFocusChanged?.addListener(this.onBrowserWindowFocusChange.bind(this))';
+        const winFocusTryCatch = '(function(){try{chrome.windows.onFocusChanged.addListener(this.onBrowserWindowFocusChange.bind(this))}catch(_e){}}).call(this)';
+        const winFocusGuard    = 'try{chrome.windows.onFocusChanged.addListener(this.onBrowserWindowFocusChange';
+        // Upgrade unpatched → try-catch
+        if (existing.includes(winFocusOrig) && !existing.includes(winFocusGuard)) {
+          existing = existing.replace(winFocusOrig, winFocusTryCatch);
+          log.info(`🩹 Patched chrome.windows.onFocusChanged (try-catch) for ${manifest.name || cwsId}`);
+        }
+        // Upgrade optional-chain → try-catch (migration from earlier patch version)
+        if (existing.includes(winFocusOptional) && !existing.includes(winFocusGuard)) {
+          existing = existing.replace(winFocusOptional, winFocusTryCatch);
+          log.info(`🩹 Upgraded chrome.windows.onFocusChanged to try-catch for ${manifest.name || cwsId}`);
         }
 
         const winGetCurrentPattern = 'chrome.windows.getCurrent(A=>Lce(A.id??chrome.windows.WINDOW_ID_NONE))';
@@ -386,11 +398,19 @@ export class ActionPolyfill {
         // Fj=()=>!1 seen elsewhere — variable names are reused across module IIFEs.
         // Fj() here may return true (Chrome/MV3 context), causing the windows branch to run.
         // Patch ALL potentially-undefined API calls in this block with optional chaining.
-        const uceNavPattern = 'chrome.webNavigation.onCommitted.addListener(n0j),chrome.tabs.onRemoved.addListener(i0j),Fj()?(chrome.windows.onFocusChanged.addListener(j0j),chrome.windows.onCreated.addListener(t0j),chrome.tabs.onCreated.addListener(r0j)):chrome.webNavigation.onCreatedNavigationTarget.addListener(o0j)';
-        const uceNavPatch   = 'chrome.webNavigation?.onCommitted?.addListener(n0j),chrome.tabs.onRemoved.addListener(i0j),Fj()?(chrome.windows?.onFocusChanged?.addListener(j0j),chrome.windows?.onCreated?.addListener(t0j),chrome.tabs.onCreated.addListener(r0j)):chrome.webNavigation?.onCreatedNavigationTarget?.addListener(o0j)';
-        if (existing.includes(uceNavPattern) && !existing.includes(uceNavPatch)) {
-          existing = existing.replace(uceNavPattern, uceNavPatch);
-          log.info(`🩹 Patched Uce() webNavigation/windows block for ${manifest.name || cwsId}`);
+        // Use try-catch on windows.onFocusChanged in Uce() for same reason as above.
+        const uceNavOrig     = 'chrome.webNavigation.onCommitted.addListener(n0j),chrome.tabs.onRemoved.addListener(i0j),Fj()?(chrome.windows.onFocusChanged.addListener(j0j),chrome.windows.onCreated.addListener(t0j),chrome.tabs.onCreated.addListener(r0j)):chrome.webNavigation.onCreatedNavigationTarget.addListener(o0j)';
+        const uceNavOptional = 'chrome.webNavigation?.onCommitted?.addListener(n0j),chrome.tabs.onRemoved.addListener(i0j),Fj()?(chrome.windows?.onFocusChanged?.addListener(j0j),chrome.windows?.onCreated?.addListener(t0j),chrome.tabs.onCreated.addListener(r0j)):chrome.webNavigation?.onCreatedNavigationTarget?.addListener(o0j)';
+        const uceNavTryCatch = 'chrome.webNavigation?.onCommitted?.addListener(n0j),chrome.tabs.onRemoved.addListener(i0j),Fj()?(function(){try{chrome.windows.onFocusChanged.addListener(j0j)}catch(_e){}})(),(function(){try{chrome.windows.onCreated.addListener(t0j)}catch(_e){}})(),(chrome.tabs.onCreated.addListener(r0j)):(chrome.webNavigation?.onCreatedNavigationTarget?.addListener(o0j))';
+        const uceNavGuard    = 'try{chrome.windows.onFocusChanged.addListener(j0j)';
+        if (existing.includes(uceNavOrig) && !existing.includes(uceNavGuard)) {
+          existing = existing.replace(uceNavOrig, uceNavTryCatch);
+          log.info(`🩹 Patched Uce() webNavigation/windows block (try-catch) for ${manifest.name || cwsId}`);
+        }
+        // Upgrade optional-chain → try-catch
+        if (existing.includes(uceNavOptional) && !existing.includes(uceNavGuard)) {
+          existing = existing.replace(uceNavOptional, uceNavTryCatch);
+          log.info(`🩹 Upgraded Uce() windows.onFocusChanged to try-catch for ${manifest.name || cwsId}`);
         }
 
         // Patch 7: chrome.webNavigation — module-level event listener registration at SW
