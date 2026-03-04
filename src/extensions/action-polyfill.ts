@@ -539,6 +539,18 @@ export class ActionPolyfill {
           log.info(`🩹 Patched chrome.webNavigation guard for ${manifest.name || cwsId}`);
         }
 
+        // Patch 8: browser.windows.create({type:'popup'}) — the extension opens its own
+        // popup/index.html in "detached" mode via a popup window. Electron creates the
+        // window but immediately closes it (popup windows flash and disappear).
+        // Fix: replace the single windows.create call with chrome.tabs.create so the
+        // detached popup opens as a normal tab that stays open.
+        const winCreateOrig  = 'browser.windows.create({url:chrome.runtime.getURL("/popup/index.html#detached"),type:"popup",...MWA()})';
+        const winCreatePatch = 'chrome.tabs.create({url:chrome.runtime.getURL("/popup/index.html#detached"),active:true})';
+        if (existing.includes(winCreateOrig) && !existing.includes(winCreatePatch)) {
+          existing = existing.replace(winCreateOrig, winCreatePatch);
+          log.info(`🩹 Patched browser.windows.create popup->tabs.create for ${manifest.name || cwsId}`);
+        }
+
         fs.writeFileSync(swPath, existing, 'utf-8');
         patched.push(cwsId);
       } catch (err: unknown) {
