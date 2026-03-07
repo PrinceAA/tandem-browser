@@ -2,6 +2,28 @@
 
 All notable changes to Tandem Browser will be documented in this file.
 
+## [v0.44.78] - 2026-03-07
+
+- fix: scope privileged extension trust (security-hardening)
+
+What was built/changed:
+- Modified files: src/api/server.ts, src/api/routes/extensions.ts, src/extensions/manager.ts, src/extensions/native-messaging.ts, src/extensions/nm-proxy.ts, src/main.ts
+- Added tests: src/api/tests/server-auth.test.ts, src/extensions/tests/trust.test.ts, src/extensions/tests/native-messaging.test.ts
+- Added explicit trusted/limited/unknown extension trust levels and route-scoped helper authorization
+- Applied native messaging host allowlist checks to both HTTP and WebSocket extension bridges
+- Bumped package version to v0.44.77 and updated CHANGELOG + security-hardening phase log state
+
+Why this approach:
+- Extension helper routes were still relying on a broad installed-origin trust signal instead of permission-scoped actor policy
+- Native messaging needed the same decision path for HTTP and WebSocket bridges so trusted extensions keep working without reopening generic loopback trust
+- Centralizing the decision in ExtensionManager keeps auditing and future containment actions aligned
+
+Tested:
+- npm run compile: zero errors
+- Focused: npx vitest run src/extensions/tests/native-messaging.test.ts src/extensions/tests/trust.test.ts src/api/tests/server-auth.test.ts src/api/tests/routes/extensions.test.ts
+- Manual: npm start, curl http://127.0.0.1:8765/status, curl -H "Authorization: Bearer <token>" http://127.0.0.1:8765/extensions/native-messaging/status
+- Note: full npx vitest run still reports pre-existing failures in src/tabs/tests/tabs.test.ts and src/extensions/tests/action-polyfill.test.ts outside this phase scope
+
 ## [v0.44.77] - 2026-03-07
 
 ### Changed
