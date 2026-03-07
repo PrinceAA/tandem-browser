@@ -350,7 +350,11 @@ async function createWindow(): Promise<BrowserWindow> {
     name: 'ShellApiAuth',
     priority: 55,
     handler: (details, headers) => {
-      if (!isLocalTandemApiUrl(details.url) || !isInternalShellWebContents(details.webContentsId)) {
+      if (!isLocalTandemApiUrl(details.url)) {
+        return headers;
+      }
+
+      if (!isInternalShellWebContents(details.webContentsId)) {
         return headers;
       }
 
@@ -359,8 +363,15 @@ async function createWindow(): Promise<BrowserWindow> {
         return headers;
       }
 
+      const nextHeaders = { ...headers };
+      for (const key of Object.keys(nextHeaders)) {
+        if (key.toLowerCase() === 'authorization') {
+          delete nextHeaders[key];
+        }
+      }
+
       return {
-        ...headers,
+        ...nextHeaders,
         Authorization: `Bearer ${token}`,
       };
     }
