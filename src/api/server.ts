@@ -14,7 +14,7 @@ import { registerBrowserRoutes } from './routes/browser';
 import { registerTabRoutes } from './routes/tabs';
 import { registerSnapshotRoutes } from './routes/snapshots';
 import { registerDevtoolsRoutes } from './routes/devtools';
-import { registerExtensionRoutes } from './routes/extensions';
+import { registerExtensionRoutes, TRUSTED_EXTENSION_ROUTE_PATHS } from './routes/extensions';
 import { registerNetworkRoutes } from './routes/network';
 import { registerSessionRoutes } from './routes/sessions';
 import { registerAgentRoutes } from './routes/agents';
@@ -27,10 +27,32 @@ import { registerWorkspaceRoutes } from './routes/workspaces';
 import { registerSyncRoutes } from './routes/sync';
 import { registerPinboardRoutes } from './routes/pinboards';
 import { registerSecurityRoutes } from '../security/routes';
-import { nmProxy } from '../extensions/nm-proxy';
+import { nmProxy, TRUSTED_EXTENSION_PROXY_PATHS } from '../extensions/nm-proxy';
 import { createLogger } from '../utils/logger';
 
 const log = createLogger('TandemAPI');
+const PUBLIC_ROUTE_PATHS = new Set<string>(['/status']);
+const TRUSTED_EXTENSION_HTTP_PATHS = new Set<string>([
+  ...TRUSTED_EXTENSION_ROUTE_PATHS,
+  ...TRUSTED_EXTENSION_PROXY_PATHS,
+]);
+
+type ApiCallerClass =
+  | 'public-healthcheck'
+  | 'shell-internal'
+  | 'local-automation'
+  | 'trusted-extension'
+  | 'unknown-local-process';
+
+type ApiAuthMode = 'public' | 'trusted-extension' | 'token';
+
+interface ApiCallerInfo {
+  kind: ApiCallerClass;
+  authMode: ApiAuthMode;
+  origin: string | null;
+  remoteAddress: string | null;
+  extensionId: string | null;
+}
 
 /** Generate or load API auth token from ~/.tandem/api-token */
 function getOrCreateAuthToken(): string {
@@ -83,52 +105,29 @@ export class TandemAPI {
         if (origin.startsWith('file://')) return callback(null, true);
         // Allow "null" origin — some Electron contexts send this for file:// → http:// fetches
         if (origin === 'null') return callback(null, true);
-        // Allow localhost origins (dev tools, other local apps)
-        if (origin.match(/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/)) return callback(null, true);
-        // Allow extension service workers to call our API (active-tab, log, etc.)
-        if (origin.startsWith('chrome-extension://')) return callback(null, true);
+        // Allow installed extensions to call their narrow helper routes.
+        if (this.isTrustedExtensionOrigin(origin)) return callback(null, true);
         // Block everything else
         callback(new Error('CORS not allowed'));
-      }
+      },
+      allowedHeaders: ['Authorization', 'Content-Type', 'X-Session'],
     }));
     this.app.use(express.json({ limit: '50mb' }));
 
-    // API auth token — require for all endpoints except /status
+    // API auth token — required for normal HTTP routes. Only a small set of
+    // extension helper routes are allowlisted for installed extension origins.
     this.authToken = getOrCreateAuthToken();
     this.app.use((req: Request, res: Response, next: NextFunction) => {
-      // Allow /status without auth (health check)
-      if (req.path === '/status') return next();
       // Allow OPTIONS preflight
       if (req.method === 'OPTIONS') return next();
 
-      // Since the server binds exclusively to 127.0.0.1, every TCP connection
-      // is local by definition. Use socket address as the authoritative check —
-      // Origin headers are unreliable across Electron versions (Chrome 131+
-      // file:// webviews send no Origin at all; older versions send 'null' or 'file://').
-      const remoteAddr = req.socket.remoteAddress || '';
-      if (remoteAddr === '127.0.0.1' || remoteAddr === '::1' || remoteAddr === '::ffff:127.0.0.1') {
-        return next();
-      }
-      // Fallback: also allow by origin for proxied setups
-      const origin = req.headers.origin || '';
-      if (!origin || origin.startsWith('file://') || origin === 'null' || origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1') || origin.startsWith('chrome-extension://')) {
+      const decision = this.authorizeRequest(req);
+      if (decision.allowed) {
         return next();
       }
 
-      // Check Authorization header or query param for external requests
-      const authHeader = req.headers.authorization;
-      const queryToken = req.query.token as string | undefined;
-
-      if (authHeader) {
-        const match = authHeader.match(/^Bearer\s+(.+)$/i);
-        if (match && this.isTokenValid(match[1])) return next();
-      }
-      if (queryToken) {
-        log.warn('Query string token auth is deprecated. Use Authorization: Bearer header instead.');
-        if (this.isTokenValid(queryToken)) return next();
-      }
-
-      res.status(401).json({ error: 'Unauthorized — provide Authorization: Bearer <token> header or ?token=<token>. Token is in ~/.tandem/api-token' });
+      log.warn(`Blocked API request (${decision.caller.kind}) ${req.method} ${req.path}: ${decision.reason}`);
+      res.status(decision.status).json({ error: decision.reason });
     });
 
     this.setupRoutes();
@@ -148,6 +147,119 @@ export class TandemAPI {
     } catch {
       return false;
     }
+  }
+
+  /** Shared validator for extension-authenticated HTTP and WebSocket bridges. */
+  public isTrustedExtensionOrigin(originHeader: string | string[] | undefined | null, requestedExtensionId?: string | null): boolean {
+    const origin = this.normalizeOrigin(originHeader);
+    const originExtensionId = this.parseExtensionOriginId(origin);
+    if (!originExtensionId) return false;
+    if (!this.isInstalledExtensionId(originExtensionId)) return false;
+    if (requestedExtensionId && requestedExtensionId !== originExtensionId) return false;
+    return true;
+  }
+
+  private authorizeRequest(req: Request): {
+    allowed: boolean;
+    caller: ApiCallerInfo;
+    reason: string;
+    status: number;
+  } {
+    const caller = this.classifyCaller(req);
+    if (caller.authMode === 'public' || caller.kind === 'local-automation' || caller.kind === 'trusted-extension') {
+      return { allowed: true, caller, reason: 'authorized', status: 200 };
+    }
+
+    if (req.query.token) {
+      return {
+        allowed: false,
+        caller,
+        reason: 'Unauthorized — query-string token auth was removed. Use Authorization: Bearer <token>. Token is in ~/.tandem/api-token',
+        status: 401,
+      };
+    }
+
+    const reason = caller.kind === 'shell-internal'
+      ? 'Unauthorized — shell/file callers are no longer auto-trusted. Use Authorization: Bearer <token>. Token is in ~/.tandem/api-token'
+      : TRUSTED_EXTENSION_HTTP_PATHS.has(req.path)
+        ? 'Unauthorized — this route is reserved for installed extension callers or bearer-token clients'
+        : 'Unauthorized — provide Authorization: Bearer <token>. Token is in ~/.tandem/api-token';
+
+    return {
+      allowed: false,
+      caller,
+      reason,
+      status: 401,
+    };
+  }
+
+  private classifyCaller(req: Request): ApiCallerInfo {
+    const origin = this.normalizeOrigin(req.headers.origin);
+    const remoteAddress = req.socket.remoteAddress ?? null;
+    const extensionId = this.parseExtensionOriginId(origin);
+    const authMode = this.getAuthModeForPath(req.path);
+    const bearerToken = this.extractBearerToken(req.headers.authorization);
+
+    if (authMode === 'public') {
+      return { kind: 'public-healthcheck', authMode, origin, remoteAddress, extensionId: null };
+    }
+
+    if (bearerToken && this.isTokenValid(bearerToken)) {
+      return { kind: 'local-automation', authMode: 'token', origin, remoteAddress, extensionId: null };
+    }
+
+    if (authMode === 'trusted-extension' && this.isTrustedExtensionOrigin(origin, this.getRequiredExtensionId(req))) {
+      return { kind: 'trusted-extension', authMode, origin, remoteAddress, extensionId };
+    }
+
+    if (origin?.startsWith('file://') || origin === 'null') {
+      return { kind: 'shell-internal', authMode, origin, remoteAddress, extensionId: null };
+    }
+
+    return { kind: 'unknown-local-process', authMode, origin, remoteAddress, extensionId };
+  }
+
+  private getAuthModeForPath(pathname: string): ApiAuthMode {
+    if (PUBLIC_ROUTE_PATHS.has(pathname)) return 'public';
+    if (TRUSTED_EXTENSION_HTTP_PATHS.has(pathname)) return 'trusted-extension';
+    return 'token';
+  }
+
+  private extractBearerToken(authorizationHeader: string | undefined): string | null {
+    if (!authorizationHeader) return null;
+    const match = authorizationHeader.match(/^Bearer\s+(.+)$/i);
+    return match?.[1] ?? null;
+  }
+
+  private normalizeOrigin(originHeader: string | string[] | undefined | null): string | null {
+    if (Array.isArray(originHeader)) {
+      return originHeader[0]?.trim() || null;
+    }
+    if (typeof originHeader === 'string') {
+      return originHeader.trim() || null;
+    }
+    return null;
+  }
+
+  private parseExtensionOriginId(origin: string | null): string | null {
+    if (!origin) return null;
+    const match = origin.match(/^chrome-extension:\/\/([a-p]{32})\/?$/);
+    return match?.[1] ?? null;
+  }
+
+  private getRequiredExtensionId(req: Request): string | null {
+    if (req.path !== '/extensions/identity/auth') {
+      return null;
+    }
+
+    const body = req.body as { extensionId?: unknown } | undefined;
+    return typeof body?.extensionId === 'string' ? body.extensionId : null;
+  }
+
+  private isInstalledExtensionId(extensionId: string): boolean {
+    return this.registry.extensionManager
+      .getInstalledExtensions()
+      .some((extension) => extension.id === extensionId);
   }
 
   private setupRoutes(): void {

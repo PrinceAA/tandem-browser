@@ -77,8 +77,8 @@ See the active `fase-*.md` document.
 | File | Purpose | Status |
 |------|---------|--------|
 | `LEES-MIJ-EERST.md` | execution guide for the full track | Ready |
-| `fase-1-api-auth.md` | API trust boundary and caller model | Ready |
-| `fase-2-gatekeeper-enforcement.md` | fail-closed decision flow | Waiting for phase 1 |
+| `fase-1-api-auth.md` | API trust boundary and caller model | Complete |
+| `fase-2-gatekeeper-enforcement.md` | fail-closed decision flow | Ready |
 | `fase-3-per-tab-monitoring.md` | broader runtime monitoring coverage | Waiting for phase 2 |
 | `fase-4-outbound-containment.md` | stronger outbound and WebSocket control | Waiting for phase 3 |
 | `fase-5-extension-trust.md` | extension trust model and route scopes | Waiting for phase 4 |
@@ -175,19 +175,19 @@ instead of depending on chat context.
 
 ### Phase 1 — API Auth
 
+- Status: Complete
+- Date: 2026-03-07
+- Commit: Pending first Phase 1 implementation commit
+- Summary: Replaced blanket loopback trust with an explicit caller model in `class TandemAPI`, kept `/status` public, required bearer auth for normal HTTP routes, removed query-string token auth, exported a narrow trusted-extension route allowlist, and applied the same installed-extension validation to the native messaging WebSocket upgrade path.
+- Remaining risks for next phase: Gatekeeper fail-closed work must preserve the trusted-extension helper allowlist and the native messaging bridge while avoiding a new implicit bypass for shell/file callers.
+
+### Phase 2 — Gatekeeper Enforcement
+
 - Status: Ready
 - Date: —
 - Commit: —
 - Summary: —
-- Remaining risks for next phase: —
-
-### Phase 2 — Gatekeeper Enforcement
-
-- Status: Waiting
-- Date: —
-- Commit: —
-- Summary: —
-- Remaining risks for next phase: —
+- Remaining risks for next phase: Existing shell/file callers are now classified but no longer auto-trusted, so Gatekeeper enforcement should assume bearer auth for shell-initiated HTTP calls unless a future internal path is explicitly designed and documented.
 
 ### Phase 3 — Per-Tab Monitoring
 

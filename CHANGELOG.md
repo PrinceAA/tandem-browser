@@ -2,6 +2,24 @@
 
 All notable changes to Tandem Browser will be documented in this file.
 
+## [v0.44.61] - 2026-03-07
+
+### Added
+- **Explicit API caller model** (`src/api/server.ts`) — classifies public health checks, shell/file callers, bearer-token automation clients, trusted extensions, and unknown local processes
+  - `/status` remains public while normal HTTP routes now require `Authorization: Bearer`
+  - trusted extension helper routes are allowlisted centrally instead of inheriting blanket loopback trust
+  - query-string token auth now fails closed with a migration error
+
+### Changed
+- `src/api/routes/extensions.ts` — exported the trusted extension helper route allowlist so extension-only bypasses stay explicit
+- `src/extensions/nm-proxy.ts` — native messaging HTTP/WebSocket bridge now requires trusted extension auth instead of localhost-only trust
+- `src/main.ts` — passes the API's shared extension validator into native messaging WebSocket startup
+
+### Technical Details
+- CORS now allows only file/null shell origins, no-origin callers, and installed `chrome-extension://` origins
+- bearer auth no longer falls back to loopback socket addresses or localhost origins
+- Phase 1 verification used an isolated `TandemAPI` instance on port `8876` because an existing Tandem process already occupied `127.0.0.1:8765`
+
 ## [v0.44.60] - 2026-03-07
 
 - docs(workflow): add reusable multi-phase execution templates

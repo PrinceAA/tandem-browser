@@ -696,7 +696,9 @@ async function startAPI(win: BrowserWindow): Promise<void> {
     }
     // Start native messaging proxy WebSocket (Electron 40 workaround)
     const { nmProxy: _nmProxyMain } = await import('./extensions/nm-proxy');
-    _nmProxyMain.startWebSocket(httpServer);
+    _nmProxyMain.startWebSocket(httpServer, {
+      isTrustedExtensionRequest: (origin, extensionId) => api?.isTrustedExtensionOrigin(origin, extensionId) ?? false,
+    });
   }
 
   // Register all IPC handlers from extracted module

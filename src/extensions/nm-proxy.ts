@@ -31,6 +31,14 @@ import { createLogger } from '../utils/logger';
 
 const log = createLogger('NMProxy');
 
+export const TRUSTED_EXTENSION_PROXY_PATHS = new Set<string>([
+  '/extensions/native-message',
+]);
+
+export interface NativeMessagingProxyAuthOptions {
+  isTrustedExtensionRequest: (origin: string | string[] | undefined, requestedExtensionId?: string | null) => boolean;
+}
+
 // Extension ID that Tandem assigns to the 1Password extension
 const TANDEM_EXTENSION_ID = 'chdppelbdlmkldaobdpeaemleeajiodj';
 
@@ -234,7 +242,8 @@ function handlePersistentConnection(ws: WebSocket, binary: string, _extensionId:
 export class NativeMessagingProxy {
   /**
    * Register POST /extensions/native-message on the Express router.
-   * Must be called after body-parser middleware is in place.
+   * Must be called after body-parser middleware is in place. TandemAPI applies
+   * the trusted-extension auth check before this handler runs.
    */
   registerRoutes(router: Router): void {
     // eslint-disable-next-line @typescript-eslint/no-misused-promises
@@ -274,9 +283,9 @@ export class NativeMessagingProxy {
 
   /**
    * Register WebSocket handler at /extensions/native-message/ws on httpServer.
-   * No auth required — localhost only.
+   * Trusted extension auth is checked during the upgrade handshake.
    */
-  startWebSocket(httpServer: HttpServer): void {
+  startWebSocket(httpServer: HttpServer, opts: NativeMessagingProxyAuthOptions): void {
     // Use noServer:true + manual upgrade handling to avoid conflicts with other
     // WebSocketServer instances (e.g. GatekeeperWebSocket) on the same http.Server.
     // Multiple WSS instances attached via server:httpServer can interfere — the first
@@ -286,6 +295,14 @@ export class NativeMessagingProxy {
     httpServer.on('upgrade', (req: IncomingMessage, socket, head) => {
       const url = new URL(req.url ?? '', 'http://localhost');
       if (url.pathname !== '/extensions/native-message/ws') return; // not ours
+
+      const extensionId = url.searchParams.get('extensionId');
+      if (!opts.isTrustedExtensionRequest(req.headers.origin, extensionId)) {
+        log.warn(`⚠️ NM proxy WS blocked for untrusted caller (${req.headers.origin ?? 'no-origin'})`);
+        socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');
+        socket.destroy();
+        return;
+      }
 
       wss.handleUpgrade(req, socket, head, (ws: WebSocket) => {
         wss.emit('connection', ws, req);

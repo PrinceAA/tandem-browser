@@ -11,6 +11,19 @@ import { createLogger } from '../../utils/logger';
 
 const log = createLogger('ExtensionRoutes');
 
+/**
+ * Extension service workers need a small set of local helper routes to bridge
+ * Electron gaps. These endpoints are reserved for installed extensions and are
+ * authorized centrally by TandemAPI.
+ */
+export const TRUSTED_EXTENSION_ROUTE_PATHS = new Set<string>([
+  '/extensions/log',
+  '/extensions/active-tab',
+  '/extensions/web-navigation/frames',
+  '/extensions/web-navigation/frame',
+  '/extensions/identity/auth',
+]);
+
 interface ExtensionFrameInfo {
   frameId: number;
   parentFrameId: number;
@@ -274,7 +287,7 @@ export function registerExtensionRoutes(router: Router, ctx: RouteContext): void
   // GET /extensions/active-tab — Active tab info for extension polyfill (tabs.query fallback).
   // Returns webContentsId as the Chrome tab id so that chrome.tabs.sendMessage() routes
   // correctly to the content script running in the active Tandem webview.
-  // No auth required — called from extension service workers via polyfill fetch().
+  // Trusted extension caller only — enforced in TandemAPI auth middleware.
   router.get('/extensions/active-tab', (_req: Request, res: Response) => {
     try {
       const tab = ctx.tabManager.getActiveTab();
@@ -344,8 +357,7 @@ export function registerExtensionRoutes(router: Router, ctx: RouteContext): void
   });
 
   // POST /extensions/identity/auth — Handle chrome.identity.launchWebAuthFlow() from extensions
-  // No auth token required — called by extension service workers via polyfill.
-  // Accepts only from localhost (Express binds to 127.0.0.1).
+  // Trusted extension caller only — enforced in TandemAPI auth middleware.
   router.post('/extensions/identity/auth', async (req: Request, res: Response) => {
     try {
       const { url, interactive, extensionId } = req.body;
