@@ -6,6 +6,21 @@ All notable changes to Tandem Browser will be documented in this file.
 
 - fix: strengthen outbound containment policy (security-hardening)
 
+What was built/changed:
+- Modified files: src/security/guardian.ts, src/security/outbound-guard.ts, src/security/types.ts, src/security/tests/gatekeeper-enforcement.test.ts, src/security/tests/outbound-containment.test.ts, package.json, CHANGELOG.md
+- Added richer outbound decision metadata so Guardian logs explain why mutating requests and WebSocket upgrades were allowed, flagged, held, or blocked
+- Tightened mode-sensitive containment for unknown WebSocket endpoints, first-visit mutating destinations, and trusted-to-untrusted cross-origin transitions, while exempting same-site cross-subdomain traffic to keep balanced mode usable
+- Added focused tests for the new outbound containment policies and Guardian enforcement path
+
+Why this approach:
+- Keeps Phase 4 scoped to the outbound decision layer while using the existing Gatekeeper hold/block path for higher-risk cases instead of inventing a separate enforcement mechanism
+
+Tested:
+- npm run compile: zero errors
+- npx vitest run src/security/tests/outbound-containment.test.ts src/security/tests/gatekeeper-enforcement.test.ts: all 11 tests pass
+- npx vitest run: still fails on unrelated pre-existing suites in src/extensions/tests/action-polyfill.test.ts and src/tabs/tests/tabs.test.ts
+- Manual: npm start succeeded, initialized the security stack and API on 127.0.0.1:8765, and curl http://127.0.0.1:8765/status returned ready state
+
 ## [v0.44.65] - 2026-03-07
 
 - fix: expand per-tab runtime security coverage (security-hardening)

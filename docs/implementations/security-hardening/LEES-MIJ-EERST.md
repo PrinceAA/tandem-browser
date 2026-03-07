@@ -83,8 +83,8 @@ See the active `fase-*.md` document.
 | `fase-1-api-auth.md` | API trust boundary and caller model | Complete |
 | `fase-2-gatekeeper-enforcement.md` | fail-closed decision flow | Complete |
 | `fase-3-per-tab-monitoring.md` | broader runtime monitoring coverage | Complete |
-| `fase-4-outbound-containment.md` | stronger outbound and WebSocket control | Ready |
-| `fase-5-extension-trust.md` | extension trust model and route scopes | Waiting for phase 4 |
+| `fase-4-outbound-containment.md` | stronger outbound and WebSocket control | Complete |
+| `fase-5-extension-trust.md` | extension trust model and route scopes | Ready |
 | `fase-6-containment-actions.md` | automatic security response actions | Waiting for phase 5 |
 
 ---
@@ -206,19 +206,19 @@ instead of depending on chat context.
 
 ### Phase 4 — Outbound Containment
 
+- Status: Complete
+- Date: 2026-03-07
+- Commit: 3220694
+- Summary: Enriched `class OutboundGuard` decisions with explicit explanations and Gatekeeper escalation hints, tightened mode-sensitive handling for unknown WebSocket endpoints plus cross-origin mutating requests, relaxed same-site cross-subdomain traffic to avoid noisy balanced-mode false positives, and updated `class Guardian` logging/enforcement plus focused tests so holds, inline allows, and fail-closed blocks all describe the outbound reason clearly.
+- Remaining risks for next phase: Phase 5 must formalize the extension trust model so privileged extension/native-messaging/sidebar traffic does not rely on generic same-site or loopback allowances, and it should decide whether current balanced-mode inline allows for disconnected Gatekeeper cases need extension-specific trust signals before containment actions become more aggressive.
+
+### Phase 5 — Extension Trust
+
 - Status: Ready
 - Date: —
 - Commit: —
 - Summary: —
-- Remaining risks for next phase: Per-tab CDP coverage now spans restored/background browsing tabs, so outbound containment must preserve those tab boundaries, avoid duplicate WebSocket policing across attached sessions, and keep trusted extension/native-messaging channels out of the normal browsing-tab decision path.
-
-### Phase 5 — Extension Trust
-
-- Status: Waiting
-- Date: —
-- Commit: —
-- Summary: —
-- Remaining risks for next phase: —
+- Remaining risks for next phase: Outbound containment now distinguishes same-site browsing traffic from cross-site riskier flows, but privileged extension/native-messaging/sidebar actors are still modeled indirectly; Phase 5 must define explicit privileged scopes so those channels neither inherit browsing restrictions nor widen trust for normal tabs.
 
 ### Phase 6 — Containment Actions
 
