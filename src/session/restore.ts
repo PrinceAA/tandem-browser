@@ -11,6 +11,7 @@ export interface SavedTab {
   title: string;
   groupId: string | null;
   pinned: boolean;
+  workspaceId?: string | null;
 }
 
 export interface SavedSession {

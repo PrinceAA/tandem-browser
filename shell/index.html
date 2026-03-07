@@ -2015,34 +2015,34 @@
       const ws = wsWorkspaces.find(w => w.id === wsActiveId);
       if (!ws) return;
       const allowedTabIds = new Set(ws.tabIds);
-      // If workspace has no tabs yet, show all tabs (first-run experience)
-      if (allowedTabIds.size === 0 && ws.isDefault) return;
 
       // Get all tab elements from the tab bar
       const tabEls = document.querySelectorAll('#tab-bar .tab[data-tab-id]');
+      const visibleTabIds = [];
       tabEls.forEach(el => {
         const tabId = el.dataset.tabId;
         // Get webContentsId for this tab from the webview
         const wv = document.querySelector(`webview[data-tab-id="${tabId}"]`);
         if (!wv) return;
         const wcId = wv.getWebContentsId ? wv.getWebContentsId() : null;
-        if (wcId !== null && allowedTabIds.size > 0) {
-          const visible = allowedTabIds.has(wcId);
-          el.style.display = visible ? '' : 'none';
-          // Also hide/show the webview if tab is hidden and currently active
-          if (!visible && wv.classList.contains('active')) {
-            // Find a visible tab to focus
-            const visibleTab = Array.from(tabEls).find(t => {
-              const tv = document.querySelector(`webview[data-tab-id="${t.dataset.tabId}"]`);
-              if (!tv || !tv.getWebContentsId) return false;
-              return allowedTabIds.has(tv.getWebContentsId());
-            });
-            if (visibleTab && window.tandem) {
-              window.tandem.focusTab(visibleTab.dataset.tabId);
-            }
-          }
+        const visible = ws.isDefault || (wcId !== null && allowedTabIds.has(wcId));
+        el.style.display = visible ? '' : 'none';
+        if (visible) {
+          visibleTabIds.push(tabId);
+        } else {
+          wv.classList.remove('active');
         }
       });
+
+      if (visibleTabIds.length === 0) return;
+
+      const activeWebview = document.querySelector('webview.active[data-tab-id]');
+      const activeTabId = activeWebview?.dataset?.tabId || null;
+      if (!activeTabId || !visibleTabIds.includes(activeTabId)) {
+        if (window.tandem) {
+          window.tandem.focusTab(visibleTabIds[0]);
+        }
+      }
     }
 
     async function openWorkspacePanel() {

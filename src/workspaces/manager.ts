@@ -219,6 +219,15 @@ export class WorkspaceManager {
     return this.workspaces.get(id);
   }
 
+  getWorkspaceIdForTab(tabId: number): string | null {
+    for (const workspace of this.workspaces.values()) {
+      if (workspace.tabIds.includes(tabId)) {
+        return workspace.id;
+      }
+    }
+    return null;
+  }
+
   update(id: string, opts: Partial<Pick<Workspace, 'name' | 'icon' | 'color'>>): Workspace {
     const ws = this.workspaces.get(id);
     if (!ws) throw new Error(`Workspace ${id} not found`);
@@ -263,6 +272,13 @@ export class WorkspaceManager {
 
     // Notify shell to re-filter tab bar
     this.notifySwitch(this.getActive());
+  }
+
+  resetTabAssignments(): void {
+    for (const workspace of this.workspaces.values()) {
+      workspace.tabIds = [];
+    }
+    this.saveToDisk();
   }
 
   private notifySwitch(ws: Workspace): void {

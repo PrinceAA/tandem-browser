@@ -43,6 +43,7 @@ export class TabManager {
   private syncTimer: ReturnType<typeof setTimeout> | null = null;
   private sessionRestore: SessionRestoreManager | null = null;
   private sessionTimer: ReturnType<typeof setTimeout> | null = null;
+  private workspaceIdResolver: ((webContentsId: number) => string | null) | null = null;
 
   constructor(win: BrowserWindow) {
     this.win = win;
@@ -54,6 +55,10 @@ export class TabManager {
 
   setSessionRestore(sr: SessionRestoreManager): void {
     this.sessionRestore = sr;
+  }
+
+  setWorkspaceIdResolver(resolver: ((webContentsId: number) => string | null) | null): void {
+    this.workspaceIdResolver = resolver;
   }
 
   /** Debounced save of session state (500ms delay) */
@@ -69,6 +74,7 @@ export class TabManager {
         title: t.title,
         groupId: t.groupId,
         pinned: t.pinned,
+        workspaceId: this.workspaceIdResolver?.(t.webContentsId) ?? null,
       }));
       this.sessionRestore.save(tabs, this.activeTabId);
     }, 500);

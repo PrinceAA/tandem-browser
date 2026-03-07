@@ -635,6 +635,7 @@ async function startAPI(win: BrowserWindow): Promise<void> {
   sessionRestoreManager = new SessionRestoreManager(syncManager);
   tabManager.setSyncManager(syncManager);
   tabManager.setSessionRestore(sessionRestoreManager);
+  tabManager.setWorkspaceIdResolver((webContentsId) => workspaceManager?.getWorkspaceIdForTab(webContentsId) ?? null);
   historyManager.setSyncManager(syncManager);
   workspaceManager.setSyncManager(syncManager);
   devToolsManager.setWingmanStream(wingmanStream!);
@@ -839,16 +840,25 @@ async function startAPI(win: BrowserWindow): Promise<void> {
   // Restore saved session tabs after the initial tab is registered
   async function restoreSessionTabs(initialTabId: string): Promise<void> {
     if (!sessionRestoreManager || !tabManager) return;
+    const currentWorkspaceManager = workspaceManager;
     const saved = sessionRestoreManager.load();
     if (!saved || saved.tabs.length === 0) return;
 
     log.info(`Restoring ${saved.tabs.length} tabs from session`);
+    currentWorkspaceManager?.resetTabAssignments();
+    const defaultWorkspaceId = currentWorkspaceManager?.list().find(ws => ws.isDefault)?.id ?? null;
 
     // Open all saved tabs
     let firstRestoredTabId: string | null = null;
     for (const savedTab of saved.tabs) {
       try {
         const tab = await tabManager.openTab(savedTab.url, savedTab.groupId ?? undefined, 'robin', 'persist:tandem', false);
+        const targetWorkspaceId = savedTab.workspaceId && currentWorkspaceManager?.get(savedTab.workspaceId)
+          ? savedTab.workspaceId
+          : defaultWorkspaceId;
+        if (targetWorkspaceId && currentWorkspaceManager) {
+          currentWorkspaceManager.moveTab(tab.webContentsId, targetWorkspaceId);
+        }
         if (savedTab.pinned) tabManager.pinTab(tab.id);
         if (savedTab.title) tab.title = savedTab.title;
         if (!firstRestoredTabId) firstRestoredTabId = tab.id;
@@ -864,6 +874,10 @@ async function startAPI(win: BrowserWindow): Promise<void> {
     // Close the initial default tab (it was just the shell bootstrap)
     if (firstRestoredTabId) {
       await tabManager.closeTab(initialTabId);
+      const activeWorkspace = currentWorkspaceManager?.getActive();
+      if (activeWorkspace && currentWorkspaceManager) {
+        currentWorkspaceManager.switch(activeWorkspace.id);
+      }
       // Focus the previously active tab (or the first restored tab)
       await tabManager.focusTab(firstRestoredTabId);
     }
