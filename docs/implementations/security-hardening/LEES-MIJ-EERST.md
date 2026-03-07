@@ -69,6 +69,9 @@ See the active `fase-*.md` document.
    functions/classes
 5. **Each phase must leave the browser working**: no "temporary broken state"
    phases
+6. **Track scope overrides general repo reading rules**: for this track, read
+   `AGENTS.md`, this file, the active `fase-*.md`, and only the files listed by
+   that phase unless the phase explicitly expands scope
 
 ---
 
@@ -126,11 +129,15 @@ Every phase session must do all of the following before it ends:
 6. Include:
    - status
    - date
-   - commit hash
+   - implementation commit hash
    - summary of completed work
    - remaining risks for the next phase
 7. Commit in English
 8. Push to `origin main`
+
+If the repo creates an automatic version-bump or docs-follow-up commit, the
+Progress Log must still record the commit that contained the phase
+implementation itself, not the later bookkeeping commit.
 
 If the phase is too large or blocked, the session must update this file with a
 clear blocked state and explain exactly what stopped progress.

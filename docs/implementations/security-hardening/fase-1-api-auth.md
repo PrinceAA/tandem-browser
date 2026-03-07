@@ -64,13 +64,17 @@ Reduce or remove:
 TOKEN=$(cat ~/.tandem/api-token)
 
 # Without token, sensitive route should fail
-curl http://127.0.0.1:8765/tabs
+curl http://127.0.0.1:8765/tabs/list
 # Expect: 401 or equivalent auth failure
 
 # With token, route should work
 curl -H "Authorization: Bearer $TOKEN" \
-  http://127.0.0.1:8765/tabs
-# Expect: {"ok":true,...} or current success payload
+  http://127.0.0.1:8765/tabs/list
+# Expect: current success payload such as {"tabs":[...],"groups":[...]}
+
+# Query-string token auth should no longer work
+curl "http://127.0.0.1:8765/tabs/list?token=$TOKEN"
+# Expect: 401 or equivalent auth failure
 
 # Health check remains available
 curl http://127.0.0.1:8765/status
