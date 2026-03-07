@@ -23,7 +23,6 @@ import { createLogger } from '../utils/logger';
 const log = createLogger('Gatekeeper');
 
 const MAX_QUEUE = 1000;
-const _DEFAULT_TIMEOUT = 30_000;
 const HEARTBEAT_INTERVAL = 30_000;
 const MAX_HISTORY = 500;
 
@@ -174,6 +173,7 @@ export class GatekeeperWebSocket {
     }
 
     this.pendingQueue.push(item);
+    log.info(`Queued ${item.decisionClass} decision for ${item.domain}`);
     this.send({ type: 'decision_needed', ...item });
 
     // Timeout: use default action if agent doesn't respond
@@ -182,7 +182,7 @@ export class GatekeeperWebSocket {
       if (idx !== -1) {
         this.resolveDecision(item.id, {
           action: item.defaultAction,
-          reason: 'timeout — agent did not respond within ' + (item.timeout / 1000) + 's',
+          reason: `${this.describeTimeoutAction(item)} — agent did not respond within ${item.timeout / 1000}s`,
           confidence: 0,
         }, 'timeout');
       }
@@ -287,6 +287,7 @@ export class GatekeeperWebSocket {
       id,
       domain: pending?.domain || 'unknown',
       category: pending?.category || 'request',
+      decisionClass: pending?.decisionClass || 'allow_immediately',
       action: decision.action,
       reason: decision.reason,
       confidence: decision.confidence,
@@ -297,6 +298,8 @@ export class GatekeeperWebSocket {
     if (this.history.length > MAX_HISTORY) {
       this.history.shift();
     }
+
+    log.info(`Resolved ${entry.decisionClass} decision ${id} for ${entry.domain}: ${decision.action} (${source})`);
 
     // Log to DB
     this.db.logEvent({
@@ -351,6 +354,12 @@ export class GatekeeperWebSocket {
     if (this.client?.readyState === WebSocket.OPEN) {
       this.client.send(JSON.stringify(msg));
     }
+  }
+
+  private describeTimeoutAction(item: PendingDecision): string {
+    return item.defaultAction === 'block'
+      ? `deny-on-timeout (${item.decisionClass})`
+      : `allow-on-timeout (${item.decisionClass})`;
   }
 
   private getOrCreateSecret(): string {

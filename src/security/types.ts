@@ -102,11 +102,13 @@ export interface WhitelistEntry {
 // === Phase 4: AI Gatekeeper Agent types ===
 
 export type GatekeeperAction = 'block' | 'allow' | 'monitor';
+export type GatekeeperDecisionClass = 'allow_immediately' | 'hold_for_decision' | 'deny_on_timeout';
 
 export interface PendingDecision {
   id: string;
   category: 'request' | 'anomaly' | 'behavior';
   domain: string;
+  decisionClass: GatekeeperDecisionClass;
   context: {
     page?: string;
     url?: string;
@@ -138,6 +140,7 @@ export interface GatekeeperHistoryEntry {
   id: string;
   domain: string;
   category: string;
+  decisionClass: GatekeeperDecisionClass;
   action: GatekeeperAction;
   reason: string;
   confidence: number;

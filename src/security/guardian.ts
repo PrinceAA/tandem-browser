@@ -4,7 +4,16 @@ import type { RequestDispatcher } from '../network/dispatcher';
 import type { SecurityDB } from './security-db';
 import type { NetworkShield } from './network-shield';
 import type { OutboundGuard } from './outbound-guard';
-import type { GuardianMode, GuardianStatus, GatekeeperDecision, PendingDecision} from './types';
+import type {
+  DomainInfo,
+  EventSeverity,
+  GatekeeperDecision,
+  GatekeeperDecisionClass,
+  GuardianMode,
+  GuardianStatus,
+  OutboundDecision,
+  PendingDecision,
+} from './types';
 import { BANKING_PATTERNS, AnalysisConfidence } from './types';
 import type { GatekeeperWebSocket } from './gatekeeper-ws';
 import { createLogger } from '../utils/logger';
@@ -13,6 +22,17 @@ const log = createLogger('Guardian');
 
 const DANGEROUS_EXTENSIONS = new Set(['.exe', '.scr', '.bat', '.cmd', '.ps1', '.vbs', '.msi', '.dll']);
 const OUTBOUND_METHODS = new Set(['POST', 'PUT', 'PATCH']);
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
+const GATEKEEPER_PENDING_LIMIT = 100;
+const GATEKEEPER_HOLD_TIMEOUT_MS = 4_000;
+const GATEKEEPER_DENY_TIMEOUT_MS = 6_000;
+
+interface GatekeeperRequestPolicy {
+  decisionClass: GatekeeperDecisionClass;
+  reason: string;
+  severity: EventSeverity;
+  context: Record<string, unknown>;
+}
 
 export class Guardian {
   private db: SecurityDB;
@@ -50,11 +70,16 @@ export class Guardian {
   }
 
   // Phase 4: Queue an uncertain case for the AI agent
-  private queueForGatekeeper(domain: string, url: string, context: Record<string, unknown>): void {
-    if (!this.gatekeeperWs) return;
+  private queueForGatekeeper(
+    domain: string,
+    url: string,
+    policy: GatekeeperRequestPolicy,
+    context: Record<string, unknown>
+  ): { id: string; decision: Promise<GatekeeperDecision> } | null {
+    if (!this.gatekeeperWs) return null;
 
     const status = this.gatekeeperWs.getStatus();
-    if (!status.connected || status.pendingDecisions >= 100) return;
+    if (!status.connected || status.pendingDecisions >= GATEKEEPER_PENDING_LIMIT) return null;
 
     const trust = this.db.getDomainInfo(domain)?.trustLevel ?? 30;
     const mode = this.getModeForDomain(domain);
@@ -63,18 +88,30 @@ export class Guardian {
       id: crypto.randomUUID(),
       category: 'request',
       domain,
+      decisionClass: policy.decisionClass,
       context: {
         url: url.substring(0, 500),
         trust,
         mode,
+        policyReason: policy.reason,
         ...context,
       },
-      defaultAction: 'allow',
-      timeout: 30_000,
+      defaultAction: policy.decisionClass === 'deny_on_timeout' ? 'block' : 'allow',
+      timeout: policy.decisionClass === 'deny_on_timeout' ? GATEKEEPER_DENY_TIMEOUT_MS : GATEKEEPER_HOLD_TIMEOUT_MS,
       createdAt: Date.now(),
     };
 
+    this.logGatekeeperRouting('held', domain, item, {
+      url: url.substring(0, 200),
+      ...policy.context,
+      ...context,
+    });
+
+    const decisionPromise = new Promise<GatekeeperDecision>((resolve) => {
+      this.decisionCallbacks.set(item.id, resolve);
+    });
     this.gatekeeperWs.sendDecisionRequest(item);
+    return { id: item.id, decision: decisionPromise };
   }
 
   registerWith(dispatcher: RequestDispatcher): void {
@@ -121,25 +158,32 @@ export class Guardian {
     log.info('Registered with dispatcher (priority 1/20/20 + redirect)');
   }
 
-  // === Request checking (synchronous, <5ms target) ===
+  // === Request checking ===
 
-  private checkRequest(details: OnBeforeRequestListenerDetails): { cancel: boolean } | null {
+  private async checkRequest(details: OnBeforeRequestListenerDetails): Promise<{ cancel: boolean } | null> {
     this.stats.total++;
     const start = performance.now();
 
     try {
       const url = details.url;
+      const resourceType = (details as any).resourceType as string | undefined;
 
       // Skip internal URLs
       if (url.startsWith('devtools://') || url.startsWith('chrome://') || url.startsWith('file://')) {
         return null;
       }
 
+      const domain = this.extractDomain(url);
+      let domainInfo: DomainInfo | null = domain ? this.db.getDomainInfo(domain) : null;
+      let riskScore = 0;
+      let riskReasons: string[] = [];
+      let dangerousDownloadExt: string | null = null;
+      let wsResult: OutboundDecision | null = null;
+
       // 1. Blocklist check (instant — Set lookup)
       const blockResult = this.shield.checkUrl(url);
       if (blockResult.blocked) {
         this.stats.blocked++;
-        const domain = this.extractDomain(url);
         this.db.logEvent({
           timestamp: Date.now(),
           domain,
@@ -156,55 +200,49 @@ export class Guardian {
 
       // 1b. Risk score check (raw IPs, non-standard ports) — skip internal addresses
       const riskHost = this.extractDomain(url);
-      if (riskHost !== 'localhost' && riskHost !== '127.0.0.1' && riskHost !== '::1') {
-      const riskResult = this.computeRiskScore(url);
-      if (riskResult.score >= 30) {
-        const riskDomain = this.extractDomain(url) ?? url.substring(0, 100);
-        this.db.logEvent({
-          timestamp: Date.now(),
-          domain: riskDomain,
-          tabId: null,
-          eventType: 'warned',
-          severity: riskResult.score >= 50 ? 'high' : 'medium',
-          category: 'network',
-          details: JSON.stringify({ url: url.substring(0, 200), riskScore: riskResult.score, reasons: riskResult.reasons }),
-          actionTaken: riskResult.score >= 65 ? 'auto_block' : 'flagged',
-          confidence: AnalysisConfidence.HEURISTIC,
-        });
-        if (riskResult.score >= 65) {
-          this.stats.blocked++;
-          return { cancel: true };
-        }
-        if (this.gatekeeperWs && riskDomain !== 'localhost' && riskDomain !== '127.0.0.1') {
-          this.queueForGatekeeper(riskDomain, url, {
-            resourceType: (details as any).resourceType,
-            method: details.method,
-            referrer: details.referrer,
-            riskScore: riskResult.score,
-            riskReasons: riskResult.reasons,
+      if (riskHost && !LOOPBACK_HOSTS.has(riskHost)) {
+        const riskResult = this.computeRiskScore(url);
+        riskScore = riskResult.score;
+        riskReasons = riskResult.reasons;
+
+        if (riskResult.score >= 30) {
+          const riskDomain = domain ?? url.substring(0, 100);
+          this.db.logEvent({
+            timestamp: Date.now(),
+            domain: riskDomain,
+            tabId: null,
+            eventType: 'warned',
+            severity: riskResult.score >= 50 ? 'high' : 'medium',
+            category: 'network',
+            details: JSON.stringify({ url: url.substring(0, 200), riskScore: riskResult.score, reasons: riskResult.reasons }),
+            actionTaken: riskResult.score >= 65 ? 'auto_block' : 'flagged',
+            confidence: AnalysisConfidence.HEURISTIC,
           });
+          if (riskResult.score >= 65) {
+            this.stats.blocked++;
+            return { cancel: true };
+          }
         }
-      }
       }
 
       // 2. Domain trust + mode check
-      const domain = this.extractDomain(url);
       if (domain) {
-        const info = this.db.getDomainInfo(domain);
-
         // Auto-detect banking/login domains → strict mode
-        if (!info && this.isBankingDomain(domain)) {
+        if (!domainInfo && this.isBankingDomain(domain)) {
           this.db.upsertDomain(domain, { guardianMode: 'strict' });
+          domainInfo = this.db.getDomainInfo(domain);
         }
 
         // Track domain visit
         this.db.upsertDomain(domain, { lastSeen: Date.now() });
+        domainInfo = this.db.getDomainInfo(domain) ?? domainInfo;
 
         // 3. Download safety check
-        if ((details as any).resourceType === 'download') {
-          const mode = info?.guardianMode || this.getModeForDomain(domain);
+        if (resourceType === 'download') {
+          const mode = this.getModeForDomain(domain);
           const ext = this.getFileExtension(url);
           if (ext && DANGEROUS_EXTENSIONS.has(ext)) {
+            dangerousDownloadExt = ext;
             if (mode === 'strict') {
               this.stats.blocked++;
               this.db.logEvent({
@@ -238,7 +276,7 @@ export class Guardian {
 
       // 4. WebSocket upgrade detection
       if (url.startsWith('ws://') || url.startsWith('wss://')) {
-        const wsResult = this.outboundGuard.analyzeWebSocket(url, details.referrer);
+        wsResult = this.outboundGuard.analyzeWebSocket(url, details.referrer);
         if (wsResult.action === 'block') {
           this.stats.blocked++;
           this.db.logEvent({
@@ -313,30 +351,28 @@ export class Guardian {
         }
       }
 
-      // Phase 4: Queue uncertain cases for AI agent analysis
-      // Allow immediately but let agent adjust trust/mode for FUTURE requests
-      // Skip localhost — Tandem's own internal API requests
-      if (domain && this.gatekeeperWs && domain !== 'localhost' && domain !== '127.0.0.1') {
-        const info = this.db.getDomainInfo(domain);
-        const trust = info?.trustLevel ?? 30;
-        const mode = info?.guardianMode || this.getModeForDomain(domain);
-        const resourceType = (details as any).resourceType as string | undefined;
+      const mode = domain ? this.getModeForDomain(domain) : this.defaultMode;
+      const gatekeeperPolicy = domain ? this.classifyGatekeeperPolicy({
+        details,
+        domain,
+        info: domainInfo,
+        mode,
+        resourceType,
+        riskScore,
+        riskReasons,
+        dangerousDownloadExt,
+        wsResult,
+      }) : null;
 
-        // Only flag genuinely uncertain cases (target: ~5% of requests)
-        const isFirstVisit = !info || (info.visitCount ?? 0) <= 1;
-        const isNavigationToUnknown = isFirstVisit && resourceType === 'mainFrame';
-
-        const isUncertain =
-          (trust < 20 && trust > 5) ||  // Actively suspicious (trust lowered by previous events)
-          (mode === 'strict' && resourceType === 'script' && trust < 50) ||  // Script on strict-mode page with low trust
-          isNavigationToUnknown;  // First visit to any domain → AI review
-
-        if (isUncertain) {
-          this.queueForGatekeeper(domain, url, {
-            resourceType,
-            method: details.method,
-            referrer: details.referrer,
-          });
+      if (domain && gatekeeperPolicy) {
+        const gatekeeperOutcome = await this.applyGatekeeperPolicy(
+          domain,
+          url,
+          gatekeeperPolicy,
+          details
+        );
+        if (gatekeeperOutcome) {
+          return gatekeeperOutcome;
         }
       }
 
@@ -346,6 +382,243 @@ export class Guardian {
     } finally {
       this.stats.totalMs += performance.now() - start;
     }
+  }
+
+  private classifyGatekeeperPolicy(input: {
+    details: OnBeforeRequestListenerDetails;
+    domain: string;
+    info: DomainInfo | null;
+    mode: GuardianMode;
+    resourceType?: string;
+    riskScore: number;
+    riskReasons: string[];
+    dangerousDownloadExt: string | null;
+    wsResult: OutboundDecision | null;
+  }): GatekeeperRequestPolicy | null {
+    if (LOOPBACK_HOSTS.has(input.domain)) return null;
+
+    const trust = input.info?.trustLevel ?? 30;
+    const visitCount = input.info?.visitCount ?? 0;
+    const isFirstVisit = !input.info || visitCount <= 1;
+
+    if (input.resourceType === 'script' && input.mode === 'strict' && trust < 50) {
+      return {
+        decisionClass: 'deny_on_timeout',
+        reason: 'strict_low_trust_script',
+        severity: trust < 20 ? 'high' : 'medium',
+        context: {
+          trust,
+          resourceType: input.resourceType,
+        },
+      };
+    }
+
+    if (input.resourceType === 'download' && input.dangerousDownloadExt && input.mode !== 'permissive') {
+      return {
+        decisionClass: 'deny_on_timeout',
+        reason: 'suspicious_download',
+        severity: 'high',
+        context: {
+          extension: input.dangerousDownloadExt,
+          trust,
+          riskScore: input.riskScore,
+        },
+      };
+    }
+
+    if (
+      input.wsResult?.action === 'flag' &&
+      input.wsResult.reason === 'unknown-ws-endpoint' &&
+      input.mode !== 'permissive'
+    ) {
+      return {
+        decisionClass: input.mode === 'strict' ? 'deny_on_timeout' : 'hold_for_decision',
+        reason: 'unknown_websocket_endpoint',
+        severity: input.mode === 'strict' ? 'high' : 'medium',
+        context: {
+          trust,
+          referrer: input.details.referrer,
+        },
+      };
+    }
+
+    if (input.resourceType === 'mainFrame' && isFirstVisit) {
+      if (input.mode === 'strict') {
+        return {
+          decisionClass: 'hold_for_decision',
+          reason: 'first_visit_navigation_strict',
+          severity: 'medium',
+          context: {
+            trust,
+            visitCount,
+          },
+        };
+      }
+
+      if (input.riskScore >= 10) {
+        return {
+          decisionClass: 'hold_for_decision',
+          reason: 'first_visit_navigation_risky',
+          severity: input.riskScore >= 40 ? 'high' : 'medium',
+          context: {
+            trust,
+            visitCount,
+            riskScore: input.riskScore,
+            riskReasons: input.riskReasons,
+          },
+        };
+      }
+    }
+
+    return null;
+  }
+
+  private async applyGatekeeperPolicy(
+    domain: string,
+    url: string,
+    policy: GatekeeperRequestPolicy,
+    details: OnBeforeRequestListenerDetails
+  ): Promise<{ cancel: boolean } | null> {
+    const availability = this.getGatekeeperAvailability();
+    const context = {
+      url: url.substring(0, 200),
+      resourceType: (details as any).resourceType,
+      method: details.method,
+      referrer: details.referrer,
+      ...policy.context,
+    };
+
+    if (availability !== 'connected') {
+      if (policy.decisionClass === 'deny_on_timeout') {
+        this.stats.blocked++;
+        this.logGatekeeperRouting('blocked', domain, {
+          id: 'inline',
+          decisionClass: policy.decisionClass,
+          defaultAction: 'block',
+        }, {
+          ...context,
+          reason: policy.reason,
+          fallback: availability,
+        });
+        return { cancel: true };
+      }
+
+      this.logGatekeeperRouting('allowed', domain, {
+        id: 'inline',
+        decisionClass: policy.decisionClass,
+        defaultAction: 'allow',
+      }, {
+        ...context,
+        reason: policy.reason,
+        fallback: availability,
+      });
+      return null;
+    }
+
+    const pendingDecision = this.queueForGatekeeper(domain, url, policy, context);
+    if (!pendingDecision) {
+      if (policy.decisionClass === 'deny_on_timeout') {
+        this.stats.blocked++;
+        this.logGatekeeperRouting('blocked', domain, {
+          id: 'inline',
+          decisionClass: policy.decisionClass,
+          defaultAction: 'block',
+        }, {
+          ...context,
+          reason: policy.reason,
+          fallback: 'queue_unavailable',
+        });
+        return { cancel: true };
+      }
+
+      this.logGatekeeperRouting('allowed', domain, {
+        id: 'inline',
+        decisionClass: policy.decisionClass,
+        defaultAction: 'allow',
+      }, {
+        ...context,
+        reason: policy.reason,
+        fallback: 'queue_unavailable',
+      });
+      return null;
+    }
+
+    const decision = await pendingDecision.decision;
+    const decisionSource = decision.reason.includes('agent did not respond within')
+      ? 'timed_out'
+      : decision.action === 'block'
+        ? 'blocked'
+        : 'allowed';
+
+    this.logGatekeeperRouting(decisionSource, domain, {
+      id: pendingDecision.id,
+      decisionClass: policy.decisionClass,
+      defaultAction: policy.decisionClass === 'deny_on_timeout' ? 'block' : 'allow',
+    }, {
+      ...context,
+      reason: policy.reason,
+      decision: decision.action,
+      decisionReason: decision.reason,
+      confidence: decision.confidence,
+    });
+
+    if (decision.action === 'block') {
+      this.stats.blocked++;
+      return { cancel: true };
+    }
+
+    this.stats.allowed++;
+    return null;
+  }
+
+  private getGatekeeperAvailability(): 'connected' | 'disconnected' | 'saturated' {
+    if (!this.gatekeeperWs) return 'disconnected';
+
+    const status = this.gatekeeperWs.getStatus();
+    if (!status.connected) return 'disconnected';
+    if (status.pendingDecisions >= GATEKEEPER_PENDING_LIMIT) return 'saturated';
+    return 'connected';
+  }
+
+  private logGatekeeperRouting(
+    outcome: 'held' | 'allowed' | 'blocked' | 'timed_out',
+    domain: string,
+    item: Pick<PendingDecision, 'id' | 'decisionClass' | 'defaultAction'>,
+    details: Record<string, unknown>
+  ): void {
+    const severity: EventSeverity =
+      outcome === 'blocked' || (outcome === 'timed_out' && details.decision === 'block')
+        ? 'high'
+        : outcome === 'held'
+          ? 'medium'
+          : 'info';
+
+    const actionTaken =
+      outcome === 'blocked' || (outcome === 'timed_out' && details.decision === 'block')
+        ? 'auto_block'
+        : 'logged';
+
+    const payload = {
+      decisionId: item.id,
+      decisionClass: item.decisionClass,
+      defaultAction: item.defaultAction,
+      outcome,
+      ...details,
+    };
+
+    this.db.logEvent({
+      timestamp: Date.now(),
+      domain,
+      tabId: null,
+      eventType: `gatekeeper_${outcome}`,
+      severity,
+      category: 'behavior',
+      details: JSON.stringify(payload),
+      actionTaken,
+      confidence: AnalysisConfidence.BEHAVIORAL,
+    });
+
+    log.info(`Gatekeeper ${outcome} for ${domain}: ${JSON.stringify(payload)}`);
   }
 
   /**

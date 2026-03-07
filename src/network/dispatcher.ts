@@ -6,7 +6,9 @@ const log = createLogger('Dispatcher');
 export interface BeforeRequestConsumer {
   name: string;
   priority: number;
-  handler: (details: OnBeforeRequestListenerDetails) => { cancel: boolean } | null;
+  handler: (
+    details: OnBeforeRequestListenerDetails
+  ) => { cancel: boolean } | null | Promise<{ cancel: boolean } | null>;
 }
 
 export interface BeforeSendHeadersConsumer {
@@ -87,27 +89,32 @@ export class RequestDispatcher {
       this.beforeRequestConsumers.sort((a, b) => a.priority - b.priority);
       const start = performance.now();
 
-      for (const consumer of this.beforeRequestConsumers) {
-        try {
-          const result = consumer.handler(details);
-          if (result?.cancel) {
-            callback({ cancel: true });
-            const elapsed = performance.now() - start;
-            if (elapsed > 5) {
-              log.warn(`Slow onBeforeRequest: ${elapsed.toFixed(1)}ms (blocked by ${consumer.name})`);
+      (async () => {
+        for (const consumer of this.beforeRequestConsumers) {
+          try {
+            const result = await consumer.handler(details);
+            if (result?.cancel) {
+              callback({ cancel: true });
+              const elapsed = performance.now() - start;
+              if (elapsed > 5) {
+                log.warn(`Slow onBeforeRequest: ${elapsed.toFixed(1)}ms (blocked by ${consumer.name})`);
+              }
+              return;
             }
-            return;
+          } catch (err) {
+            log.error(`Error in ${consumer.name}.onBeforeRequest:`, err);
           }
-        } catch (err) {
-          log.error(`Error in ${consumer.name}.onBeforeRequest:`, err);
         }
-      }
 
-      callback({ cancel: false });
-      const elapsed = performance.now() - start;
-      if (elapsed > 5) {
-        log.warn(`Slow onBeforeRequest: ${elapsed.toFixed(1)}ms for ${details.url.substring(0, 80)}`);
-      }
+        callback({ cancel: false });
+        const elapsed = performance.now() - start;
+        if (elapsed > 5) {
+          log.warn(`Slow onBeforeRequest: ${elapsed.toFixed(1)}ms for ${details.url.substring(0, 80)}`);
+        }
+      })().catch(err => {
+        log.error('Unhandled onBeforeRequest error:', err);
+        callback({ cancel: false });
+      });
     });
 
     this.session.webRequest.onBeforeSendHeaders((details, callback) => {
