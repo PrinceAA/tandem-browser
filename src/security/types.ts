@@ -46,6 +46,13 @@ export interface BlocklistEntry {
 }
 
 export type BlocklistValueType = 'domain' | 'url';
+export type BlocklistRefreshTier = 'hourly' | 'daily' | 'weekly';
+
+export const BLOCKLIST_REFRESH_INTERVALS_MS: Record<BlocklistRefreshTier, number> = {
+  hourly: 3_600_000,
+  daily: 86_400_000,
+  weekly: 604_800_000,
+};
 
 export interface HostsFileBlocklistParser {
   type: 'hosts_file';
@@ -87,12 +94,35 @@ export interface BlocklistSourceDefinition {
   parser: BlocklistParserConfig;
   category: string;
   cacheFileName: string;
+  refreshTier: BlocklistRefreshTier;
 }
 
 export interface ParsedBlocklistSource {
   domains: string[];
   blockedIpOrigins: string[];
   skipped: number;
+}
+
+export interface BlocklistSourceFreshness {
+  name: string;
+  category: string;
+  refreshTier: BlocklistRefreshTier;
+  refreshIntervalMs: number;
+  lastUpdated: string | null;
+  lastAttempted: string | null;
+  lastError: string | null;
+  consecutiveFailures: number;
+  nextDueAt: string | null;
+  due: boolean;
+}
+
+export interface BlocklistSourceUpdateResult {
+  name: string;
+  refreshTier: BlocklistRefreshTier;
+  domains: number;
+  added: number;
+  success: boolean;
+  error: string | null;
 }
 
 export interface GuardianStatus {
@@ -276,7 +306,7 @@ export interface CorrelatedThreat {
 }
 
 export interface UpdateResult {
-  sources: { name: string; domains: number; added: number }[];
+  sources: BlocklistSourceUpdateResult[];
   totalAdded: number;
   totalRemoved: number;
   errors: string[];

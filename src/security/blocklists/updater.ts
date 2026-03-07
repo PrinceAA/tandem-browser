@@ -5,7 +5,9 @@ import { tandemDir } from '../../utils/paths';
 import type { SecurityDB } from '../security-db';
 import type { NetworkShield } from '../network-shield';
 import type {
+  BlocklistSourceFreshness,
   BlocklistSourceDefinition,
+  BlocklistSourceUpdateResult,
   BlocklistValueType,
   CsvBlocklistParser,
   JsonBlocklistParser,
@@ -29,6 +31,7 @@ export const BLOCKLIST_SOURCES: BlocklistSourceDefinition[] = [
     parser: { type: 'url_list' },
     category: 'malware',
     cacheFileName: 'urlhaus.txt',
+    refreshTier: 'hourly',
   },
   {
     name: 'phishing',
@@ -36,6 +39,7 @@ export const BLOCKLIST_SOURCES: BlocklistSourceDefinition[] = [
     parser: { type: 'domain_list' },
     category: 'phishing',
     cacheFileName: 'phishing.txt',
+    refreshTier: 'daily',
   },
   {
     name: 'stevenblack',
@@ -43,6 +47,7 @@ export const BLOCKLIST_SOURCES: BlocklistSourceDefinition[] = [
     parser: { type: 'hosts_file' },
     category: 'tracker',
     cacheFileName: 'hosts.txt',
+    refreshTier: 'weekly',
   },
 ];
 
@@ -104,9 +109,39 @@ export class BlocklistUpdater {
    * Update all blocklist sources: download, parse, sync to DB, reload shield.
    */
   async update(): Promise<UpdateResult> {
-    const results: UpdateResult = { sources: [], totalAdded: 0, totalRemoved: 0, errors: [] };
+    return this.updateSources(BLOCKLIST_SOURCES);
+  }
 
-    for (const source of BLOCKLIST_SOURCES) {
+  /**
+   * Update only the sources that are currently due based on their refresh tier.
+   */
+  async updateDueSources(now = Date.now()): Promise<UpdateResult> {
+    const dueSources = this.getSourceStatuses(now)
+      .filter((status) => status.due)
+      .map((status) => this.getSourceDefinition(status.name));
+
+    return this.updateSources(dueSources);
+  }
+
+  getSourceStatuses(now = Date.now()): BlocklistSourceFreshness[] {
+    return this.db.getBlocklistSourceFreshnessSnapshot(BLOCKLIST_SOURCES, now);
+  }
+
+  hasDueSources(now = Date.now()): boolean {
+    return this.getSourceStatuses(now).some((status) => status.due);
+  }
+
+  private async updateSources(sources: BlocklistSourceDefinition[]): Promise<UpdateResult> {
+    const results: UpdateResult = { sources: [], totalAdded: 0, totalRemoved: 0, errors: [] };
+    let shouldReloadShield = false;
+
+    for (const source of sources) {
+      const attemptedAt = new Date().toISOString();
+      const previousStatus = this.db.getBlocklistSourceFreshness(source);
+      this.db.setBlocklistSourceFreshness(source.name, {
+        lastAttempted: attemptedAt,
+      });
+
       try {
         log.info(`Downloading ${source.name} from ${source.url}...`);
         const content = await this.download(source.url);
@@ -115,20 +150,64 @@ export class BlocklistUpdater {
 
         const parsed = parseBlocklistContent(source, content);
         const added = this.db.syncBlocklistSource(source.name, parsed.domains, source.category);
-        results.sources.push({ name: source.name, domains: parsed.domains.length, added });
+        const completedAt = new Date().toISOString();
+        this.db.setBlocklistSourceFreshness(source.name, {
+          lastAttempted: attemptedAt,
+          lastUpdated: completedAt,
+          lastError: null,
+          consecutiveFailures: 0,
+        });
+        results.sources.push(this.createSourceResult(source, parsed.domains.length, added, true, null));
         results.totalAdded += added;
+        shouldReloadShield = true;
         log.info(`${source.name}: ${parsed.domains.length} domains parsed, ${added} synced to DB`);
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
         results.errors.push(`${source.name}: ${errMsg}`);
+        this.db.setBlocklistSourceFreshness(source.name, {
+          lastAttempted: attemptedAt,
+          lastError: errMsg,
+          consecutiveFailures: previousStatus.consecutiveFailures + 1,
+        });
+        results.sources.push(this.createSourceResult(source, 0, 0, false, errMsg));
         log.error(`Failed to update ${source.name}:`, errMsg);
       }
     }
 
-    this.shield.reload();
-    log.info(`NetworkShield reloaded. Total added: ${results.totalAdded}, errors: ${results.errors.length}`);
+    if (shouldReloadShield) {
+      this.shield.reload();
+      this.db.setBlocklistMeta('lastUpdated', new Date().toISOString());
+      log.info(`NetworkShield reloaded. Total added: ${results.totalAdded}, errors: ${results.errors.length}`);
+    } else if (sources.length > 0) {
+      log.info(`Blocklist update finished with no successful source refreshes. Errors: ${results.errors.length}`);
+    }
 
     return results;
+  }
+
+  private getSourceDefinition(sourceName: string): BlocklistSourceDefinition {
+    const source = BLOCKLIST_SOURCES.find((candidate) => candidate.name === sourceName);
+    if (!source) {
+      throw new Error(`Unknown blocklist source: ${sourceName}`);
+    }
+    return source;
+  }
+
+  private createSourceResult(
+    source: BlocklistSourceDefinition,
+    domains: number,
+    added: number,
+    success: boolean,
+    error: string | null,
+  ): BlocklistSourceUpdateResult {
+    return {
+      name: source.name,
+      refreshTier: source.refreshTier,
+      domains,
+      added,
+      success,
+      error,
+    };
   }
 
   /**

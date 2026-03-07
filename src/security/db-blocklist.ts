@@ -48,6 +48,7 @@ export class SecurityBlocklistDB {
   getBlocklistStats(): { total: number; bySource: Record<string, number>; lastUpdate: string } {
     const totalRow = this.stmtBlocklistCount.get() as { total: number };
     const sourceRows = this.stmtBlocklistBySource.all() as { source: string; count: number }[];
+    const lastUpdate = this.getBlocklistMeta('lastUpdated') ?? '';
     const bySource: Record<string, number> = {};
     for (const row of sourceRows) {
       bySource[row.source] = row.count;
@@ -55,7 +56,7 @@ export class SecurityBlocklistDB {
     return {
       total: totalRow.total,
       bySource,
-      lastUpdate: new Date().toISOString(),
+      lastUpdate,
     };
   }
 

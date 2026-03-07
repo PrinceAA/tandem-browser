@@ -2,6 +2,18 @@
 
 All notable changes to Tandem Browser will be documented in this file.
 
+## [v0.44.84] - 2026-03-07
+
+### Changed
+- **Tiered security blocklist scheduler** (`src/security/security-manager.ts`, `src/security/blocklists/updater.ts`, `src/security/security-db.ts`) — replaced the single 24-hour refresh rule with per-source hourly/daily/weekly cadence, persisted freshness and failure metadata per feed, and prevented overlapping scheduled refresh runs
+- **Security freshness visibility** (`src/security/routes.ts`, `src/security/db-blocklist.ts`) — exposed per-source blocklist freshness through `/security/status` and `/security/blocklist/stats`, and aligned database `lastUpdate` reporting with persisted refresh metadata instead of the request timestamp
+- **Phase 3 regression coverage** (`src/security/tests/blocklist-updater.test.ts`, `src/api/tests/routes/security.test.ts`) — added focused tests for due-source selection, per-source failure isolation, and freshness/status responses
+
+### Technical Details
+- `class BlocklistUpdater` now owns source cadence checks, updates only due feeds during scheduled runs, records `lastUpdated` / `lastAttempted` / failure state per source, and reloads `NetworkShield` only after at least one successful source refresh
+- `class SecurityManager` now schedules hourly freshness checks while serializing queued refresh runs so stale-source checks cannot overlap into concurrent downloads
+- Verification: `npm run compile` passed; `npx vitest run src/security/tests/blocklist-updater.test.ts src/api/tests/routes/security.test.ts` passed; full `npx vitest run` still reports unrelated pre-existing failures in `src/tabs/tests/tabs.test.ts` and `src/extensions/tests/action-polyfill.test.ts`; `npm start` plus `curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8765/security/status` succeeded and returned per-source freshness data
+
 ## [v0.44.83] - 2026-03-07
 
 ### Changed

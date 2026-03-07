@@ -19,9 +19,11 @@ export function registerSecurityRoutes(
   // 1. GET /security/status — Overall security status + stats
   app.get('/security/status', (_req, res) => {
     try {
+      const blocklistSources = sm.getBlocklistUpdater().getSourceStatuses();
       res.json({
         guardian: sm.getGuardian().getStatus(),
         blocklist: sm.getShield().getStats(),
+        blocklistSources,
         outbound: sm.getOutboundGuard().getStats(),
         database: {
           events: sm.getDb().getEventCount(),
@@ -129,9 +131,11 @@ export function registerSecurityRoutes(
     try {
       const memoryStats = sm.getShield().getStats();
       const dbStats = sm.getDb().getBlocklistStats();
+      const sourceStatuses = sm.getBlocklistUpdater().getSourceStatuses();
       res.json({
         memory: memoryStats,
         database: dbStats,
+        sources: sourceStatuses,
       });
     } catch (e) {
       res.status(500).json({ error: e instanceof Error ? e.message : String(e) });

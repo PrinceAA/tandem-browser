@@ -2,10 +2,29 @@ import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
 import { tandemDir } from '../utils/paths';
-import type { SecurityEvent, DomainInfo, BlocklistEntry, GuardianMode, WhitelistEntry, BaselineEntry, ZeroDayCandidate, TrustChange } from './types';
+import {
+  BLOCKLIST_REFRESH_INTERVALS_MS,
+  type BaselineEntry,
+  type BlocklistEntry,
+  type BlocklistSourceDefinition,
+  type BlocklistSourceFreshness,
+  type DomainInfo,
+  type GuardianMode,
+  type SecurityEvent,
+  type TrustChange,
+  type WhitelistEntry,
+  type ZeroDayCandidate,
+} from './types';
 import { SecurityEventsDB } from './db-events';
 import { SecurityBaselinesDB } from './db-baselines';
 import { SecurityBlocklistDB } from './db-blocklist';
+
+interface StoredBlocklistSourceFreshness {
+  lastUpdated: string | null;
+  lastAttempted: string | null;
+  lastError: string | null;
+  consecutiveFailures: number;
+}
 
 export class SecurityDB {
   private db: Database.Database;
@@ -684,6 +703,55 @@ export class SecurityDB {
     this.blocklistDB.setBlocklistMeta(key, value);
   }
 
+  getBlocklistSourceFreshness(
+    source: BlocklistSourceDefinition,
+    now = Date.now(),
+  ): BlocklistSourceFreshness {
+    const stored = this.readBlocklistSourceFreshness(source.name);
+    const refreshIntervalMs = BLOCKLIST_REFRESH_INTERVALS_MS[source.refreshTier];
+    const lastUpdatedMs = stored.lastUpdated ? Date.parse(stored.lastUpdated) : Number.NaN;
+    const hasValidLastUpdated = Number.isFinite(lastUpdatedMs);
+    const nextDueAt = hasValidLastUpdated
+      ? new Date(lastUpdatedMs + refreshIntervalMs).toISOString()
+      : null;
+
+    return {
+      name: source.name,
+      category: source.category,
+      refreshTier: source.refreshTier,
+      refreshIntervalMs,
+      lastUpdated: stored.lastUpdated,
+      lastAttempted: stored.lastAttempted,
+      lastError: stored.lastError,
+      consecutiveFailures: stored.consecutiveFailures,
+      nextDueAt,
+      due: !hasValidLastUpdated || now >= (lastUpdatedMs + refreshIntervalMs),
+    };
+  }
+
+  getBlocklistSourceFreshnessSnapshot(
+    sources: BlocklistSourceDefinition[],
+    now = Date.now(),
+  ): BlocklistSourceFreshness[] {
+    return sources.map((source) => this.getBlocklistSourceFreshness(source, now));
+  }
+
+  setBlocklistSourceFreshness(
+    sourceName: string,
+    freshness: Partial<StoredBlocklistSourceFreshness>,
+  ): void {
+    const existing = this.readBlocklistSourceFreshness(sourceName);
+    const next: StoredBlocklistSourceFreshness = {
+      ...existing,
+      ...freshness,
+      consecutiveFailures: freshness.consecutiveFailures ?? existing.consecutiveFailures,
+    };
+    this.setBlocklistMeta(
+      this.getBlocklistSourceFreshnessKey(sourceName),
+      JSON.stringify(next),
+    );
+  }
+
   // === Analyzed script hash cache (persistent cross-session) ===
 
   isScriptHashAnalyzed(hash: string): boolean {
@@ -698,5 +766,38 @@ export class SecurityDB {
 
   close(): void {
     this.db.close();
+  }
+
+  private getBlocklistSourceFreshnessKey(sourceName: string): string {
+    return `sourceFreshness:${sourceName}`;
+  }
+
+  private readBlocklistSourceFreshness(sourceName: string): StoredBlocklistSourceFreshness {
+    const raw = this.getBlocklistMeta(this.getBlocklistSourceFreshnessKey(sourceName));
+    if (!raw) {
+      return {
+        lastUpdated: null,
+        lastAttempted: null,
+        lastError: null,
+        consecutiveFailures: 0,
+      };
+    }
+
+    try {
+      const parsed = JSON.parse(raw) as Partial<StoredBlocklistSourceFreshness>;
+      return {
+        lastUpdated: typeof parsed.lastUpdated === 'string' ? parsed.lastUpdated : null,
+        lastAttempted: typeof parsed.lastAttempted === 'string' ? parsed.lastAttempted : null,
+        lastError: typeof parsed.lastError === 'string' ? parsed.lastError : null,
+        consecutiveFailures: typeof parsed.consecutiveFailures === 'number' ? parsed.consecutiveFailures : 0,
+      };
+    } catch {
+      return {
+        lastUpdated: null,
+        lastAttempted: null,
+        lastError: null,
+        consecutiveFailures: 0,
+      };
+    }
   }
 }

@@ -168,11 +168,11 @@ Do not start later phases early.
 
 ### Phase 3 — Tiered Update Scheduler
 
-- Status: Planned
-- Date: —
-- Commit: —
-- Summary: Introduce per-source update cadence and freshness metadata so high-signal feeds refresh often while slower feeds remain cheap.
-- Remaining risks for next phase: Feed expansion must stay curated; large low-signal lists should not be added just because the parser can ingest them.
+- Status: Complete
+- Date: 2026-03-07
+- Commit: `pending — recorded in the follow-up docs commit after the implementation commit hash exists`
+- Summary: Replaced the single 24-hour scheduler with per-source hourly/daily/weekly freshness checks, persisted `lastUpdated` / `lastAttempted` / failure state per feed in blocklist metadata, exposed per-source freshness through the security status routes, and added focused tests for due-source selection plus route visibility.
+- Remaining risks for next phase: Feed expansion must stay curated; large low-signal or ad-focused lists still do not belong in the browser core, and any new structured feeds must avoid reintroducing startup or reload stalls.
 
 ### Phase 4 — Core Feed Expansion
 

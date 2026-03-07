@@ -16,7 +16,7 @@ import { BlocklistUpdater } from './blocklists/updater';
 import { AnalyzerManager } from './analyzer-manager';
 import { EventBurstAnalyzer } from './analyzers/example-analyzer';
 import type { PageMetrics} from './types';
-import { AnalysisConfidence } from './types';
+import { AnalysisConfidence, BLOCKLIST_REFRESH_INTERVALS_MS } from './types';
 import { createLogger } from '../utils/logger';
 
 const log = createLogger('SecurityManager');
@@ -84,6 +84,8 @@ export class SecurityManager {
 
   // Phase 0-B: Blocklist update scheduling
   private blocklistInterval: ReturnType<typeof setInterval> | null = null;
+  private blocklistUpdateRunning: boolean = false;
+  private blocklistUpdateQueued: boolean = false;
   private tabStates: Map<number, SecurityTabState> = new Map();
   onContainmentIncident: ((incident: SecurityContainmentIncident) => void) | null = null;
 
@@ -402,33 +404,46 @@ export class SecurityManager {
   }
 
   /**
-   * Check if blocklist update is overdue (>24h) and schedule recurring updates.
+   * Check due sources immediately and then re-check on the hourly scheduler
+   * without allowing overlapping refresh runs.
    */
   private scheduleBlocklistUpdate(): void {
-    const TWENTY_FOUR_HOURS = 86_400_000;
-
-    // Check if update is overdue
-    const lastUpdated = this.db.getBlocklistMeta('lastUpdated');
-    if (!lastUpdated || (Date.now() - new Date(lastUpdated).getTime()) > TWENTY_FOUR_HOURS) {
-      // Run asynchronously — don't block constructor
+    if (this.blocklistUpdater.hasDueSources()) {
       void this.runBlocklistUpdate();
     }
 
-    // Schedule recurring updates every 24 hours
-    this.blocklistInterval = setInterval(() => this.runBlocklistUpdate(), TWENTY_FOUR_HOURS);
+    this.blocklistInterval = setInterval(() => {
+      void this.runBlocklistUpdate();
+    }, BLOCKLIST_REFRESH_INTERVALS_MS.hourly);
   }
 
   /**
-   * Run blocklist update and persist lastUpdated timestamp on success.
+   * Run due-source blocklist updates while preventing overlapping refresh jobs.
    */
   private async runBlocklistUpdate(): Promise<void> {
+    if (this.blocklistUpdateRunning) {
+      this.blocklistUpdateQueued = true;
+      return;
+    }
+
+    this.blocklistUpdateRunning = true;
     try {
       log.info('Running scheduled blocklist update...');
-      const result = await this.blocklistUpdater.update();
-      this.db.setBlocklistMeta('lastUpdated', new Date().toISOString());
+      const result = await this.blocklistUpdater.updateDueSources();
+      if (result.sources.length === 0) {
+        log.info('No blocklist sources are due for refresh');
+        return;
+      }
+
       log.info(`Blocklist update complete: ${result.totalAdded} entries, ${result.errors.length} errors`);
     } catch (e) {
       log.warn('Blocklist update failed:', e instanceof Error ? e.message : String(e));
+    } finally {
+      this.blocklistUpdateRunning = false;
+      if (this.blocklistUpdateQueued) {
+        this.blocklistUpdateQueued = false;
+        void this.runBlocklistUpdate();
+      }
     }
   }
 

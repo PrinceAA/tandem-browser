@@ -91,6 +91,20 @@ function createMockSecurityManager() {
 
   const blocklistUpdater = {
     update: vi.fn().mockResolvedValue({ updated: true }),
+    getSourceStatuses: vi.fn().mockReturnValue([
+      {
+        name: 'urlhaus',
+        category: 'malware',
+        refreshTier: 'hourly',
+        refreshIntervalMs: 3_600_000,
+        lastUpdated: null,
+        lastAttempted: null,
+        lastError: null,
+        consecutiveFailures: 0,
+        nextDueAt: null,
+        due: true,
+      },
+    ]),
   };
 
   const analyzerManager = {
@@ -160,6 +174,21 @@ describe('security routes', () => {
       expect(res.status).toBe(200);
       expect(res.body).toHaveProperty('guardian');
       expect(res.body).toHaveProperty('blocklist');
+      expect(res.body).toHaveProperty('blocklistSources');
+      expect(res.body.blocklistSources).toEqual([
+        {
+          name: 'urlhaus',
+          category: 'malware',
+          refreshTier: 'hourly',
+          refreshIntervalMs: 3_600_000,
+          lastUpdated: null,
+          lastAttempted: null,
+          lastError: null,
+          consecutiveFailures: 0,
+          nextDueAt: null,
+          due: true,
+        },
+      ]);
       expect(res.body).toHaveProperty('outbound');
       expect(res.body).toHaveProperty('database');
       expect(res.body.database).toEqual({
@@ -382,6 +411,20 @@ describe('security routes', () => {
       expect(res.body).toEqual({
         memory: { total: 100, blocked: 5 },
         database: { lists: 3, entries: 1000 },
+        sources: [
+          {
+            name: 'urlhaus',
+            category: 'malware',
+            refreshTier: 'hourly',
+            refreshIntervalMs: 3_600_000,
+            lastUpdated: null,
+            lastAttempted: null,
+            lastError: null,
+            consecutiveFailures: 0,
+            nextDueAt: null,
+            due: true,
+          },
+        ],
       });
     });
 
