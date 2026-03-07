@@ -21,6 +21,14 @@ import { createLogger } from '../utils/logger';
 
 const log = createLogger('SecurityManager');
 
+interface SecurityTabState {
+  cdpAttached: boolean;
+  monitorsInjected: boolean;
+  resourceMonitoringActive: boolean;
+  strictModePolicy: boolean;
+  lastUrl: string | null;
+}
+
 export class SecurityManager {
   private db: SecurityDB;
   private shield: NetworkShield;
@@ -54,6 +62,7 @@ export class SecurityManager {
 
   // Phase 0-B: Blocklist update scheduling
   private blocklistInterval: ReturnType<typeof setInterval> | null = null;
+  private tabStates: Map<number, SecurityTabState> = new Map();
 
   constructor() {
     this.db = new SecurityDB();
@@ -193,25 +202,38 @@ export class SecurityManager {
    * Called when a tab is attached/focused in DevToolsManager.
    * Enables security CDP domains, injects monitors, starts resource monitoring.
    */
-  async onTabAttached(): Promise<void> {
-    if (!this.devToolsManager) return;
+  async onTabAttached(wcId: number): Promise<void> {
+    this.resetTabRuntime(wcId);
+    await this.ensureTabCoverage(wcId, { fullMonitoring: true, makePrimary: true });
+  }
 
-    // Reset per-tab state
-    this.scriptGuard?.reset();
-    this.behaviorMonitor?.reset();
+  /**
+   * Called when a live browsing tab exists but has not necessarily been focused yet.
+   * Attaches baseline security coverage without switching the active CDP target.
+   */
+  async onTabCreated(wcId: number): Promise<void> {
+    await this.ensureTabCoverage(wcId, { makePrimary: false });
+  }
 
-    try {
-      // Enable Debugger domain for scriptParsed events
-      await this.devToolsManager.enableSecurityDomains();
+  /**
+   * Called after a main-frame navigation completes so per-tab runtime state can
+   * be reset without affecting other attached tabs.
+   */
+  async onTabNavigated(wcId: number): Promise<void> {
+    const state = this.getOrCreateTabState(wcId);
+    this.resetTabRuntime(wcId);
+    await this.ensureTabCoverage(wcId, {
+      fullMonitoring: state.resourceMonitoringActive,
+      makePrimary: false,
+    });
+  }
 
-      // Inject security monitors (keylogger, crypto miner, clipboard, form hijack)
-      await this.scriptGuard?.injectMonitors();
-
-      // Start CPU/memory monitoring
-      this.behaviorMonitor?.startResourceMonitoring();
-    } catch (e) {
-      log.warn('onTabAttached error:', e instanceof Error ? e.message : String(e));
-    }
+  /** Clean up all tab-scoped security state when a tab is destroyed. */
+  onTabClosed(wcId: number): void {
+    this.behaviorMonitor?.clearTab(wcId);
+    this.scriptGuard?.clearTab(wcId);
+    this.devToolsManager?.detachFromTab(wcId);
+    this.tabStates.delete(wcId);
   }
 
   /**
@@ -414,7 +436,74 @@ export class SecurityManager {
     this.gatekeeperWs?.destroy();
     this.scriptGuard?.destroy();
     this.behaviorMonitor?.destroy();
+    this.tabStates.clear();
     this.db.close();
     log.info('Destroyed');
+  }
+
+  private async ensureTabCoverage(wcId: number, opts?: { fullMonitoring?: boolean; makePrimary?: boolean }): Promise<void> {
+    if (!this.devToolsManager) return;
+
+    const state = this.getOrCreateTabState(wcId);
+
+    try {
+      const wc = await this.devToolsManager.attachToTab(wcId, { makePrimary: opts?.makePrimary ?? false });
+      if (!wc) {
+        this.tabStates.delete(wcId);
+        return;
+      }
+
+      state.cdpAttached = true;
+      state.lastUrl = wc.getURL();
+      state.strictModePolicy = this.getStrictModeForUrl(state.lastUrl);
+
+      await this.devToolsManager.enableSecurityDomains(wcId);
+
+      await this.scriptGuard?.injectMonitors(wcId);
+      state.monitorsInjected = this.scriptGuard?.hasMonitorsInjected(wcId) ?? false;
+
+      const shouldRunFullMonitoring = Boolean(opts?.fullMonitoring || state.strictModePolicy);
+      if (shouldRunFullMonitoring) {
+        this.behaviorMonitor?.startResourceMonitoring(wcId);
+        state.resourceMonitoringActive = this.behaviorMonitor?.isResourceMonitoringActive(wcId) ?? false;
+      } else {
+        this.behaviorMonitor?.stopResourceMonitoring(wcId);
+        state.resourceMonitoringActive = false;
+      }
+    } catch (e) {
+      log.warn('ensureTabCoverage error:', e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  private resetTabRuntime(wcId: number): void {
+    this.scriptGuard?.reset(wcId);
+    this.behaviorMonitor?.reset(wcId);
+
+    const state = this.getOrCreateTabState(wcId);
+    state.monitorsInjected = false;
+  }
+
+  private getOrCreateTabState(wcId: number): SecurityTabState {
+    let state = this.tabStates.get(wcId);
+    if (!state) {
+      state = {
+        cdpAttached: false,
+        monitorsInjected: false,
+        resourceMonitoringActive: false,
+        strictModePolicy: false,
+        lastUrl: null,
+      };
+      this.tabStates.set(wcId, state);
+    }
+    return state;
+  }
+
+  private getStrictModeForUrl(url: string): boolean {
+    try {
+      const domain = new URL(url).hostname.toLowerCase();
+      return this.guardian.getModeForDomain(domain) === 'strict';
+    } catch {
+      return false;
+    }
   }
 }

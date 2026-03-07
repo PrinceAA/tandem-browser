@@ -26,6 +26,12 @@ export interface ResourceSnapshot {
   cpuWarning: boolean;
 }
 
+interface BehaviorTabState {
+  cpuCheckInterval: NodeJS.Timeout | null;
+  lastMetrics: { taskDuration: number; jsHeapUsedSize: number; timestamp: number } | null;
+  resourceSnapshots: ResourceSnapshot[];
+}
+
 /**
  * BehaviorMonitor — Monitors runtime behavior for suspicious activity.
  *
@@ -44,10 +50,8 @@ export class BehaviorMonitor {
   private guardian: Guardian;
   private devToolsManager: DevToolsManager;
   private scriptGuard: ScriptGuard | null = null;
-  private cpuCheckInterval: NodeJS.Timeout | null = null;
   private permissionLog: PermissionRecord[] = [];
-  private lastMetrics: { taskDuration: number; jsHeapUsedSize: number; timestamp: number } | null = null;
-  private resourceSnapshots: ResourceSnapshot[] = [];
+  private tabStates: Map<number, BehaviorTabState> = new Map();
 
   constructor(db: SecurityDB, guardian: Guardian, devToolsManager: DevToolsManager) {
     this.db = db;
@@ -134,13 +138,18 @@ export class BehaviorMonitor {
    * Start resource monitoring for crypto miner detection.
    * Polls CPU metrics every 10 seconds via Performance.getMetrics.
    */
-  startResourceMonitoring(): void {
-    // Guard: if already running, don't restart (prevents double-start on repeated onTabAttached calls)
-    if (this.cpuCheckInterval) return;
+  startResourceMonitoring(wcId?: number): void {
+    const resolvedWcId = wcId ?? this.resolveCurrentWcId();
+    if (!resolvedWcId) return;
 
-    this.cpuCheckInterval = setInterval(async () => {
+    const state = this.getOrCreateTabState(resolvedWcId);
+
+    // Guard: if already running, don't restart (prevents double-start on repeated lifecycle calls)
+    if (state.cpuCheckInterval) return;
+
+    state.cpuCheckInterval = setInterval(async () => {
       try {
-        const result = await this.devToolsManager.sendCommand('Performance.getMetrics');
+        const result = await this.devToolsManager.sendCommandToTab(resolvedWcId, 'Performance.getMetrics');
         const metricsMap: Record<string, number> = {};
         for (const m of result.metrics || []) {
           metricsMap[m.name] = m.value;
@@ -148,19 +157,19 @@ export class BehaviorMonitor {
 
         const taskDuration = metricsMap['TaskDuration'] || 0;
         const jsHeapUsedSize = metricsMap['JSHeapUsedSize'] || 0;
-        const wasmCount = this.scriptGuard?.getRecentWasmCount() || 0;
+        const wasmCount = this.scriptGuard?.getRecentWasmCount(resolvedWcId) || 0;
 
         // Check for CPU spike patterns
         let cpuWarning = false;
-        if (this.lastMetrics) {
-          const timeDelta = (Date.now() - this.lastMetrics.timestamp) / 1000; // seconds
-          const taskDelta = taskDuration - this.lastMetrics.taskDuration;
+        if (state.lastMetrics) {
+          const timeDelta = (Date.now() - state.lastMetrics.timestamp) / 1000; // seconds
+          const taskDelta = taskDuration - state.lastMetrics.taskDuration;
           const cpuUsage = timeDelta > 0 ? taskDelta / timeDelta : 0;
 
           // CPU usage > 80% of poll interval + WASM activity = likely crypto miner
           if (cpuUsage > 0.8 && wasmCount > 0) {
             cpuWarning = true;
-            const wc = this.devToolsManager.getAttachedWebContents();
+            const wc = this.devToolsManager.getAttachedWebContents(resolvedWcId);
             const domain = wc ? this.extractDomain(wc.getURL()) : null;
 
             this.db.logEvent({
@@ -183,9 +192,9 @@ export class BehaviorMonitor {
           }
 
           // Memory growing rapidly without interaction = suspicious
-          const heapDelta = jsHeapUsedSize - this.lastMetrics.jsHeapUsedSize;
+          const heapDelta = jsHeapUsedSize - state.lastMetrics.jsHeapUsedSize;
           if (heapDelta > 50_000_000) { // 50MB growth in 10 seconds
-            const wc = this.devToolsManager.getAttachedWebContents();
+            const wc = this.devToolsManager.getAttachedWebContents(resolvedWcId);
             const domain = wc ? this.extractDomain(wc.getURL()) : null;
 
             this.db.logEvent({
@@ -206,33 +215,43 @@ export class BehaviorMonitor {
           }
         }
 
-        this.lastMetrics = { taskDuration, jsHeapUsedSize, timestamp: Date.now() };
+        state.lastMetrics = { taskDuration, jsHeapUsedSize, timestamp: Date.now() };
 
         // Store snapshot (keep last 30)
-        this.resourceSnapshots.push({
+        state.resourceSnapshots.push({
           timestamp: Date.now(),
           metrics: metricsMap,
           wasmActivity: wasmCount,
           cpuWarning,
         });
-        if (this.resourceSnapshots.length > 30) {
-          this.resourceSnapshots.shift();
+        if (state.resourceSnapshots.length > 30) {
+          state.resourceSnapshots.shift();
         }
       } catch {
         // Tab may have been closed or CDP disconnected — ignore
       }
     }, 10_000);
 
-    log.info('Resource monitoring started (10s interval)');
+    log.info(`Resource monitoring started for wc ${resolvedWcId} (10s interval)`);
   }
 
   /** Stop resource monitoring */
-  stopResourceMonitoring(): void {
-    if (this.cpuCheckInterval) {
-      clearInterval(this.cpuCheckInterval);
-      this.cpuCheckInterval = null;
+  stopResourceMonitoring(wcId?: number): void {
+    if (wcId === undefined) {
+      for (const tabWcId of this.tabStates.keys()) {
+        this.stopResourceMonitoring(tabWcId);
+      }
+      return;
     }
-    this.lastMetrics = null;
+
+    const state = this.tabStates.get(wcId);
+    if (state?.cpuCheckInterval) {
+      clearInterval(state.cpuCheckInterval);
+      state.cpuCheckInterval = null;
+    }
+    if (state) {
+      state.lastMetrics = null;
+    }
   }
 
   /** Get permission log */
@@ -241,8 +260,10 @@ export class BehaviorMonitor {
   }
 
   /** Get resource snapshots */
-  getResourceSnapshots(): ResourceSnapshot[] {
-    return this.resourceSnapshots;
+  getResourceSnapshots(wcId?: number): ResourceSnapshot[] {
+    const resolvedWcId = wcId ?? this.resolveCurrentWcId();
+    if (!resolvedWcId) return [];
+    return this.getOrCreateTabState(resolvedWcId).resourceSnapshots;
   }
 
   /** Kill a script/worker via CDP (for emergency crypto miner termination) */
@@ -272,9 +293,26 @@ export class BehaviorMonitor {
   }
 
   /** Reset state (call on tab switch) */
-  reset(): void {
-    this.lastMetrics = null;
-    this.resourceSnapshots = [];
+  reset(wcId?: number): void {
+    if (wcId === undefined) {
+      for (const tabWcId of this.tabStates.keys()) {
+        this.reset(tabWcId);
+      }
+      return;
+    }
+
+    const state = this.getOrCreateTabState(wcId);
+    state.lastMetrics = null;
+    state.resourceSnapshots = [];
+  }
+
+  isResourceMonitoringActive(wcId: number): boolean {
+    return !!this.getOrCreateTabState(wcId).cpuCheckInterval;
+  }
+
+  clearTab(wcId: number): void {
+    this.stopResourceMonitoring(wcId);
+    this.tabStates.delete(wcId);
   }
 
   private extractDomain(url: string): string | null {
@@ -286,10 +324,26 @@ export class BehaviorMonitor {
   }
 
   destroy(): void {
-    if (this.cpuCheckInterval) {
-      clearInterval(this.cpuCheckInterval);
-      this.cpuCheckInterval = null;
+    this.stopResourceMonitoring();
+    this.tabStates.clear();
+  }
+
+  private getOrCreateTabState(wcId: number): BehaviorTabState {
+    let state = this.tabStates.get(wcId);
+    if (!state) {
+      state = {
+        cpuCheckInterval: null,
+        lastMetrics: null,
+        resourceSnapshots: [],
+      };
+      this.tabStates.set(wcId, state);
     }
+    return state;
+  }
+
+  private resolveCurrentWcId(): number | null {
+    const wc = this.devToolsManager.getDispatchWebContents() ?? this.devToolsManager.getAttachedWebContents();
+    return wc?.id ?? null;
   }
 }
 

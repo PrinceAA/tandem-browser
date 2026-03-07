@@ -123,6 +123,8 @@ let cookieFlushTimer: ReturnType<typeof setInterval> | null = null;
 const pendingContextMenuWebContents: WebContents[] = [];
 /** Queue tab-register IPC when it arrives before tabManager is ready */
 let pendingTabRegister: { webContentsId: number; url: string } | null = null;
+/** Queue security coverage for webviews that load before SecurityManager is ready */
+const pendingSecurityCoverageWebContentsIds: number[] = [];
 
 function canUseWindow(win: BrowserWindow | null): win is BrowserWindow {
   return !!win && !win.isDestroyed() && !win.webContents.isDestroyed();
@@ -139,11 +141,23 @@ function clearStartApiIpcListeners(): void {
   ipcMain.removeAllListeners('tab-register');
 }
 
+function queueSecurityCoverage(webContentsId: number): void {
+  if (securityManager) {
+    securityManager.onTabCreated(webContentsId).catch(e => log.warn('securityManager.onTabCreated failed:', e instanceof Error ? e.message : e));
+    return;
+  }
+
+  if (!pendingSecurityCoverageWebContentsIds.includes(webContentsId)) {
+    pendingSecurityCoverageWebContentsIds.push(webContentsId);
+  }
+}
+
 function teardown(): void {
   clearCookieFlushTimer();
   clearStartApiIpcListeners();
   pendingTabRegister = null;
   pendingContextMenuWebContents.length = 0;
+  pendingSecurityCoverageWebContentsIds.length = 0;
 
   if (api) api.stop();
   api = null;
@@ -318,7 +332,21 @@ async function createWindow(): Promise<BrowserWindow> {
           return;
         }
         contents.executeJavaScript(stealthScript).catch((e) => log.warn('Stealth script injection failed:', e.message));
+
+        if (!isSidebarWebview) {
+          queueSecurityCoverage(contents.id);
+        }
       });
+
+      if (!isSidebarWebview) {
+        contents.on('did-finish-load', () => {
+          securityManager?.onTabNavigated(contents.id).catch(e => log.warn('securityManager.onTabNavigated failed:', e instanceof Error ? e.message : e));
+        });
+
+        contents.on('destroyed', () => {
+          securityManager?.onTabClosed(contents.id);
+        });
+      }
 
       // Register context menu for this webview (queue if manager not yet ready)
       if (contextMenuManager) {
@@ -591,6 +619,11 @@ async function startAPI(win: BrowserWindow): Promise<void> {
     });
   }
 
+  while (pendingSecurityCoverageWebContentsIds.length > 0) {
+    const wcId = pendingSecurityCoverageWebContentsIds.shift()!;
+    securityManager?.onTabCreated(wcId).catch(e => log.warn('securityManager.onTabCreated failed:', e instanceof Error ? e.message : e));
+  }
+
   // Configure native messaging host directories before loading extensions.
   // Electron 40 requires session.setNativeMessagingHostDirectory() to be called
   // before chrome.runtime.connectNative() / sendNativeMessage() will work.
@@ -778,7 +811,7 @@ async function startAPI(win: BrowserWindow): Promise<void> {
       // Reduced from 2000ms to CDP_ATTACH_DELAY_MS to minimize ScriptGuard race window
       setTimeout(async () => {
         await devToolsManager?.attachToTab(data.webContentsId).catch(e => log.warn('devToolsManager.attachToTab failed:', e instanceof Error ? e.message : e));
-        securityManager?.onTabAttached().catch(e => log.warn('securityManager.onTabAttached failed:', e instanceof Error ? e.message : e));
+        securityManager?.onTabAttached(data.webContentsId).catch(e => log.warn('securityManager.onTabAttached failed:', e instanceof Error ? e.message : e));
       }, CDP_ATTACH_DELAY_MS);
       // Restore saved session tabs (replaces the default new tab), then reconcile
       // to remove any renderer orphans that result from failed tab restorations.
@@ -807,7 +840,7 @@ async function startAPI(win: BrowserWindow): Promise<void> {
     syncTabsToContext(tabManager!, contextBridge!);
     setTimeout(async () => {
       await devToolsManager?.attachToTab(data.webContentsId).catch(e => log.warn('devToolsManager.attachToTab failed:', e instanceof Error ? e.message : e));
-      securityManager?.onTabAttached().catch(e => log.warn('securityManager.onTabAttached failed:', e instanceof Error ? e.message : e));
+      securityManager?.onTabAttached(data.webContentsId).catch(e => log.warn('securityManager.onTabAttached failed:', e instanceof Error ? e.message : e));
     }, CDP_ATTACH_DELAY_MS);
     // Restore saved session tabs (replaces the default new tab), then reconcile.
     restoreSessionTabs(tab.id)

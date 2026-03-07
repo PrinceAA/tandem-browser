@@ -15,6 +15,11 @@ const log = createLogger('CDP');
 
 export type { CDPSubscriber };
 
+interface AttachedSession {
+  messageHandler: (_event: Electron.Event, method: string, params: Record<string, unknown>) => void;
+  detachHandler: (_event: Electron.Event, reason: string) => void;
+}
+
 /**
  * DevToolsManager — Provides CDP (Chrome DevTools Protocol) access to webview tabs.
  *
@@ -43,8 +48,9 @@ export class DevToolsManager {
   private pageInspector: PageInspector;
 
   // CDP state
-  private attachedWcId: number | null = null;
-  private attached = false;
+  private primaryWcId: number | null = null;
+  private attachedSessions: Map<number, AttachedSession> = new Map();
+  private dispatchWcId: number | null = null;
 
   // CDP subscriber system (Phase 3: security modules subscribe to events)
   private subscribers: CDPSubscriber[] = [];
@@ -84,9 +90,10 @@ export class DevToolsManager {
    * Debugger.enable is NOT enabled by default — only Network, DOM, Page are.
    * Without Debugger.enable, ScriptGuard will NOT receive Debugger.scriptParsed events.
    */
-  async enableSecurityDomains(): Promise<void> {
-    if (!this.attached || !this.attachedWcId) return;
-    const wc = webContents.fromId(this.attachedWcId);
+  async enableSecurityDomains(wcId?: number): Promise<void> {
+    const wc = wcId
+      ? await this.attachToTab(wcId, { makePrimary: false })
+      : this.getAttachedWebContents();
     if (!wc || wc.isDestroyed()) return;
     try {
       await wc.debugger.sendCommand('Debugger.enable');
@@ -98,10 +105,17 @@ export class DevToolsManager {
   }
 
   /** Get the currently attached WebContents (for security modules that need it) */
-  getAttachedWebContents(): WebContents | null {
-    if (!this.attached || !this.attachedWcId) return null;
-    const wc = webContents.fromId(this.attachedWcId);
+  getAttachedWebContents(wcId?: number): WebContents | null {
+    const targetWcId = wcId ?? this.dispatchWcId ?? this.primaryWcId;
+    if (!targetWcId || !this.attachedSessions.has(targetWcId)) return null;
+    const wc = webContents.fromId(targetWcId);
     return (wc && !wc.isDestroyed()) ? wc : null;
+  }
+
+  /** Get the webContents currently dispatching a CDP event to subscribers. */
+  getDispatchWebContents(): WebContents | null {
+    if (!this.dispatchWcId) return null;
+    return this.getAttachedWebContents(this.dispatchWcId);
   }
 
   // ═══ Lifecycle ═══
@@ -115,15 +129,7 @@ export class DevToolsManager {
     const wc = await this.tabManager.getActiveWebContents();
     if (!wc || wc.isDestroyed()) return null;
 
-    // Already attached to this webContents
-    if (this.attached && this.attachedWcId === wc.id) return wc;
-
-    // Different tab — detach from old, attach to new
-    if (this.attached && this.attachedWcId !== wc.id) {
-      this.detach();
-    }
-
-    return this.attach(wc);
+    return this.attach(wc, { makePrimary: true });
   }
 
   /**
@@ -131,20 +137,21 @@ export class DevToolsManager {
    * Use this instead of ensureAttached() when you already know which tab to target
    * (e.g. on tab-focus) to avoid race conditions with TabManager's active tab state.
    */
-  async attachToTab(wcId: number): Promise<WebContents | null> {
+  async attachToTab(wcId: number, opts?: { makePrimary?: boolean }): Promise<WebContents | null> {
     const wc = webContents.fromId(wcId);
     if (!wc || wc.isDestroyed()) return null;
 
-    // Already attached to this one
-    if (this.attached && this.attachedWcId === wcId) return wc;
-
-    // Detach from old
-    if (this.attached) this.detach();
-
-    return this.attach(wc);
+    return this.attach(wc, { makePrimary: opts?.makePrimary ?? true });
   }
 
-  private async attach(wc: WebContents): Promise<WebContents | null> {
+  private async attach(wc: WebContents, opts?: { makePrimary?: boolean }): Promise<WebContents | null> {
+    if (this.attachedSessions.has(wc.id)) {
+      if (opts?.makePrimary ?? true) {
+        this.primaryWcId = wc.id;
+      }
+      return wc;
+    }
+
     try {
       wc.debugger.attach('1.3');
     } catch (e) {
@@ -159,21 +166,23 @@ export class DevToolsManager {
       }
     }
 
-    this.attached = true;
-    this.attachedWcId = wc.id;
+    if (opts?.makePrimary ?? true) {
+      this.primaryWcId = wc.id;
+    }
 
     // Listen for CDP events
-    wc.debugger.on('message', (_event: Electron.Event, method: string, params: Record<string, unknown>) => {
-      this.handleCDPEvent(method, params);
-    });
+    const messageHandler = (_event: Electron.Event, method: string, params: Record<string, unknown>) => {
+      this.handleCDPEvent(wc.id, method, params);
+    };
+    wc.debugger.on('message', messageHandler);
 
     // Auto-detach on destruction
-    wc.debugger.on('detach', (_event: Electron.Event, reason: string) => {
+    const detachHandler = (_event: Electron.Event, reason: string) => {
       log.info(`🔌 CDP detached: ${reason}`);
-      this.attached = false;
-      this.attachedWcId = null;
-      this.consoleCapture.reset();
-    });
+      this.detachFromTab(wc.id, { skipDebuggerDetach: true });
+    };
+    wc.debugger.on('detach', detachHandler);
+    this.attachedSessions.set(wc.id, { messageHandler, detachHandler });
 
     // Enable domains
     const tabId = this.findTabId(wc);
@@ -278,54 +287,66 @@ export class DevToolsManager {
     }
   }
 
-  private detach(): void {
-    if (!this.attachedWcId) return;
+  detachFromTab(wcId: number, opts?: { skipDebuggerDetach?: boolean }): void {
+    const session = this.attachedSessions.get(wcId);
+    if (!session) return;
     try {
-      const wc = webContents.fromId(this.attachedWcId);
-      if (wc && !wc.isDestroyed() && wc.debugger.isAttached()) {
+      const wc = webContents.fromId(wcId);
+      if (wc && !wc.isDestroyed()) {
+        wc.debugger.removeListener('message', session.messageHandler);
+        wc.debugger.removeListener('detach', session.detachHandler);
+      }
+      if (!opts?.skipDebuggerDetach && wc && !wc.isDestroyed() && wc.debugger.isAttached()) {
         wc.debugger.detach();
       }
     } catch (e) {
       log.warn('CDP detach error (harmless):', e instanceof Error ? e.message : e);
     }
-    this.attached = false;
-    this.attachedWcId = null;
-    this.consoleCapture.reset();
+    this.attachedSessions.delete(wcId);
+    if (this.primaryWcId === wcId) {
+      this.primaryWcId = null;
+    }
   }
 
   /** Route CDP events to sub-captures and subscribers */
-  private handleCDPEvent(method: string, params: Record<string, unknown>): void {
-    const tabId = this.attachedWcId ? this.findTabIdByWcId(this.attachedWcId) : undefined;
+  private handleCDPEvent(wcId: number, method: string, params: Record<string, unknown>): void {
+    const previousDispatchWcId = this.dispatchWcId;
+    this.dispatchWcId = wcId;
+    const tabId = this.findTabIdByWcId(wcId);
 
-    // Wingman Vision: binding callbacks (check before subscribers for __tandem* bindings)
-    if (method === 'Runtime.bindingCalled') {
-      // Wingman bindings — handle internally
-      const wingmanBindings = ['__tandemScroll', '__tandemSelection', '__tandemFormFocus'];
-      if (wingmanBindings.includes(params.name as string)) {
-        this.onWingmanBinding(params as unknown as CDPBindingCalledParams, tabId);
+    try {
+      // Wingman Vision: binding callbacks (check before subscribers for __tandem* bindings)
+      if (method === 'Runtime.bindingCalled') {
+        // Wingman bindings — handle internally
+        const wingmanBindings = ['__tandemScroll', '__tandemSelection', '__tandemFormFocus'];
+        if (wingmanBindings.includes(params.name as string)) {
+          this.onWingmanBinding(params as unknown as CDPBindingCalledParams, tabId, wcId);
+        }
+        // Fall through to subscribers (security bindings like __tandemSecurityAlert)
       }
-      // Fall through to subscribers (security bindings like __tandemSecurityAlert)
-    }
 
-    // Console events
-    if (method !== 'Runtime.bindingCalled') {
-      if (this.consoleCapture.handleEvent(method, params, tabId)) {
-        // Still dispatch to subscribers even if console handled it
-      }
-    }
-
-    // Network events
-    this.networkCapture.handleEvent(method, params, tabId);
-
-    // Dispatch to subscribers (always — security modules need to see all events)
-    for (const sub of this.subscribers) {
-      if (sub.events.includes(method) || sub.events.includes('*')) {
-        try {
-          sub.handler(method, params);
-        } catch (err) {
-          log.error(`Subscriber ${sub.name} error:`, err);
+      // Console events
+      if (method !== 'Runtime.bindingCalled') {
+        if (this.consoleCapture.handleEvent(method, params, tabId)) {
+          // Still dispatch to subscribers even if console handled it
         }
       }
+
+      // Network events
+      this.networkCapture.handleEvent(method, params, tabId);
+
+      // Dispatch to subscribers (always — security modules need to see all events)
+      for (const sub of this.subscribers) {
+        if (sub.events.includes(method) || sub.events.includes('*')) {
+          try {
+            sub.handler(method, params);
+          } catch (err) {
+            log.error(`Subscriber ${sub.name} error:`, err);
+          }
+        }
+      }
+    } finally {
+      this.dispatchWcId = previousDispatchWcId;
     }
   }
 
@@ -401,12 +422,39 @@ export class DevToolsManager {
     return wc.debugger.sendCommand(method, params || {});
   }
 
+  /** Send a CDP command to a specific attached tab without switching the primary target. */
+  async sendCommandToTab(wcId: number, method: string, params?: Record<string, any>): Promise<any> {
+    const wc = await this.attachToTab(wcId, { makePrimary: false });
+    if (!wc) throw new Error(`No tab for webContents ${wcId} or CDP attach failed`);
+
+    return wc.debugger.sendCommand(method, params || {});
+  }
+
   // ═══ Evaluate ═══
 
   /** Evaluate JavaScript in the page context via CDP (more powerful than executeJS) */
   async evaluate(expression: string, opts?: { returnByValue?: boolean; awaitPromise?: boolean }): Promise<any> {
     const wc = await this.ensureAttached();
     if (!wc) throw new Error('No active tab or CDP attach failed');
+
+    const result = await wc.debugger.sendCommand('Runtime.evaluate', {
+      expression,
+      returnByValue: opts?.returnByValue ?? true,
+      awaitPromise: opts?.awaitPromise ?? true,
+      generatePreview: true,
+    });
+
+    if (result.exceptionDetails) {
+      throw new Error(result.exceptionDetails.text || 'Evaluation failed');
+    }
+
+    return result.result?.value ?? result.result;
+  }
+
+  /** Evaluate JavaScript in a specific tab without switching the primary target. */
+  async evaluateInTab(wcId: number, expression: string, opts?: { returnByValue?: boolean; awaitPromise?: boolean }): Promise<any> {
+    const wc = await this.attachToTab(wcId, { makePrimary: false });
+    if (!wc) throw new Error(`No tab for webContents ${wcId} or CDP attach failed`);
 
     const result = await wc.debugger.sendCommand('Runtime.evaluate', {
       expression,
@@ -431,11 +479,11 @@ export class DevToolsManager {
     console: { entries: number; errors: number; lastId: number };
     network: { entries: number };
   } {
-    const tabId = this.attachedWcId ? this.findTabIdByWcId(this.attachedWcId) || null : null;
+    const tabId = this.primaryWcId ? this.findTabIdByWcId(this.primaryWcId) || null : null;
     return {
-      attached: this.attached,
+      attached: this.primaryWcId !== null,
       tabId,
-      wcId: this.attachedWcId,
+      wcId: this.primaryWcId,
       console: {
         entries: this.consoleCapture.entryCount,
         errors: this.consoleCapture.getErrors().length,
@@ -449,13 +497,13 @@ export class DevToolsManager {
 
   // ═══ Wingman Vision ═══
 
-  private onWingmanBinding(params: { name: string; payload: string }, tabId?: string): void {
+  private onWingmanBinding(params: { name: string; payload: string }, tabId?: string, wcId?: number): void {
     if (!this.wingmanStream) return;
     const timestamp = Date.now();
     const tab = tabId || 'unknown';
 
     // Get current URL for context
-    const wc = this.attachedWcId ? webContents.fromId(this.attachedWcId) : null;
+    const wc = wcId ? webContents.fromId(wcId) : null;
     const url = wc && !wc.isDestroyed() ? wc.getURL() : '';
 
     switch (params.name) {
@@ -516,7 +564,9 @@ export class DevToolsManager {
   // ═══ Cleanup ═══
 
   destroy(): void {
-    this.detach();
+    for (const wcId of Array.from(this.attachedSessions.keys())) {
+      this.detachFromTab(wcId);
+    }
     this.consoleCapture.clear();
     this.networkCapture.clear();
   }

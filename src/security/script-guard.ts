@@ -59,6 +59,13 @@ const TRUSTED_CDN_DOMAINS = new Set([
   'cdn.segment.com',
 ]);
 
+interface ScriptGuardTabState {
+  monitorInjected: boolean;
+  scriptsParsed: Map<string, { url: string; length: number }>;
+  wasmEvents: number[];
+  analyzedUrls: Set<string>;
+}
+
 /** Run JS_THREAT_RULES against script source, return scored analysis result */
 function analyzeScriptContent(source: string, url: string): ScriptAnalysisResult {
   const matches: ThreatRuleMatch[] = [];
@@ -112,11 +119,7 @@ export class ScriptGuard {
   private db: SecurityDB;
   private guardian: Guardian;
   private devToolsManager: DevToolsManager;
-  private monitorInjected = false;
-  private scriptsParsed: Map<string, { url: string; length: number }> = new Map();
-  private wasmEvents: number[] = []; // timestamps of WASM instantiations
-  /** URLs fully analyzed this session — skip re-analysis on reload/navigation within same tab */
-  private analyzedUrls: Set<string> = new Set();
+  private tabStates: Map<number, ScriptGuardTabState> = new Map();
 
   /** Callback for critical script-analysis detections (wired by SecurityManager for Gatekeeper notification) */
   onCriticalDetection: ((domain: string, analysis: ScriptAnalysisResult) => void) | null = null;
@@ -150,6 +153,9 @@ export class ScriptGuard {
 
   /** Analyze every loaded script (called via CDP Debugger.scriptParsed) */
   private analyzeScript(scriptInfo: Record<string, unknown>): void {
+    const wcId = this.resolveCurrentWcId();
+    if (!wcId) return;
+
     const scriptId = scriptInfo.scriptId as string;
     const url = scriptInfo.url as string | undefined;
     const length = scriptInfo.length as number | undefined;
@@ -158,8 +164,8 @@ export class ScriptGuard {
     // Skip inline scripts (no URL), chrome-extension, devtools, and debugger scripts
     if (!url || url.startsWith('chrome-extension://') || url.startsWith('devtools://') || url.startsWith('debugger://')) return;
 
-    // Track in memory
-    this.scriptsParsed.set(scriptId, { url, length: length || 0 });
+    const state = this.getOrCreateTabState(wcId);
+    state.scriptsParsed.set(scriptId, { url, length: length || 0 });
 
     const domain = this.extractDomain(url);
     if (!domain) return;
@@ -198,10 +204,10 @@ export class ScriptGuard {
     // 4. Static analysis + entropy for external scripts (async — fires in background)
     // Skip if already analyzed this session (same URL = same CDN script, no need to re-analyze)
     const scriptLength = length || 0;
-    if (scriptLength <= MAX_SCRIPT_SIZE && !this.analyzedUrls.has(url)) {
-      const pageDomain = this.getCurrentPageDomain();
+    if (scriptLength <= MAX_SCRIPT_SIZE && !state.analyzedUrls.has(url)) {
+      const pageDomain = this.getCurrentPageDomain(wcId);
       if (pageDomain && domain !== pageDomain) {
-        this.analyzeExternalScript(scriptId, url, domain).catch(e => log.warn('analyzeExternalScript failed:', e instanceof Error ? e.message : e));
+        this.analyzeExternalScript(wcId, scriptId, url, domain).catch(e => log.warn('analyzeExternalScript failed:', e instanceof Error ? e.message : e));
       }
     }
   }
@@ -426,16 +432,17 @@ export class ScriptGuard {
   }
 
   /** Get the current page domain from the attached webContents */
-  private getCurrentPageDomain(): string | null {
-    const wc = this.devToolsManager.getAttachedWebContents();
+  private getCurrentPageDomain(wcId?: number): string | null {
+    const wc = this.devToolsManager.getAttachedWebContents(wcId);
     if (!wc) return null;
     return this.extractDomain(wc.getURL());
   }
 
   /** Combined static analysis + entropy check on external script source via CDP */
-  private async analyzeExternalScript(scriptId: string, url: string, domain: string): Promise<void> {
+  private async analyzeExternalScript(wcId: number, scriptId: string, url: string, domain: string): Promise<void> {
+    const state = this.getOrCreateTabState(wcId);
     try {
-      const result = await this.devToolsManager.sendCommand('Debugger.getScriptSource', { scriptId });
+      const result = await this.devToolsManager.sendCommandToTab(wcId, 'Debugger.getScriptSource', { scriptId });
       const source = (result as any)?.scriptSource;
       if (!source || typeof source !== 'string') return;
       if (source.length > MAX_SCRIPT_SIZE) return;
@@ -449,7 +456,7 @@ export class ScriptGuard {
 
       // 0-fast. Persistent hash cache — skip all expensive analysis if this exact script was analyzed before
       if (this.db.isScriptHashAnalyzed(sourceHash)) {
-        this.analyzedUrls.add(url);
+        state.analyzedUrls.add(url);
         return;
       }
 
@@ -566,7 +573,7 @@ export class ScriptGuard {
       }
 
       // Mark as analyzed: in-memory (session) + persistent DB (cross-session)
-      this.analyzedUrls.add(url);
+      state.analyzedUrls.add(url);
       this.db.markScriptHashAnalyzed(sourceHash);
 
       const perfMs = performance.now() - perfStart;
@@ -586,7 +593,7 @@ export class ScriptGuard {
       if (/coinhive|cryptonight|monero|minero|coinbase.*miner/i.test(text)) {
         this.db.logEvent({
           timestamp: Date.now(),
-          domain: null,
+          domain: this.getCurrentPageDomain(),
           tabId: null,
           eventType: 'warned',
           severity: 'high',
@@ -604,8 +611,12 @@ export class ScriptGuard {
    * Uses Runtime.addBinding (invisible to page — same pattern as Wingman Vision).
    * Uses Page.addScriptToEvaluateOnNewDocument for persistence across navigations.
    */
-  async injectMonitors(): Promise<void> {
-    if (this.monitorInjected) return;
+  async injectMonitors(wcId?: number): Promise<void> {
+    const resolvedWcId = wcId ?? this.resolveCurrentWcId();
+    if (!resolvedWcId) return;
+
+    const state = this.getOrCreateTabState(resolvedWcId);
+    if (state.monitorInjected) return;
 
     const monitorScript = `(function() {
       // Guard against double-injection
@@ -691,7 +702,7 @@ export class ScriptGuard {
 
     try {
       // Register the binding FIRST (invisible CDP-level binding)
-      await this.devToolsManager.sendCommand('Runtime.addBinding', {
+      await this.devToolsManager.sendCommandToTab(resolvedWcId, 'Runtime.addBinding', {
         name: '__tandemSecurityAlert',
       });
 
@@ -709,18 +720,18 @@ export class ScriptGuard {
       });
 
       // Inject as persistent script (survives navigations)
-      await this.devToolsManager.sendCommand('Page.addScriptToEvaluateOnNewDocument', {
+      await this.devToolsManager.sendCommandToTab(resolvedWcId, 'Page.addScriptToEvaluateOnNewDocument', {
         source: monitorScript,
         worldName: '', // main world — must see page scripts
       });
 
       // Also run immediately on current page
-      await this.devToolsManager.sendCommand('Runtime.evaluate', {
+      await this.devToolsManager.sendCommandToTab(resolvedWcId, 'Runtime.evaluate', {
         expression: monitorScript,
         silent: true,
       });
 
-      this.monitorInjected = true;
+      state.monitorInjected = true;
       log.info('Security monitors injected');
     } catch (e) {
       log.warn('Monitor injection failed:', e instanceof Error ? e.message : String(e));
@@ -729,7 +740,7 @@ export class ScriptGuard {
 
   private handleSecurityAlert(alert: Record<string, unknown>): void {
     // Get current URL for domain context
-    const wc = this.devToolsManager.getAttachedWebContents();
+    const wc = this.devToolsManager.getDispatchWebContents() ?? this.devToolsManager.getAttachedWebContents();
     const currentUrl = wc ? wc.getURL() : '';
     const domain = this.extractDomain(currentUrl);
 
@@ -749,11 +760,13 @@ export class ScriptGuard {
         break;
 
       case 'wasm_instantiate': {
+        if (!wc) return;
+        const state = this.getOrCreateTabState(wc.id);
         // Track WASM instantiation timestamps for crypto miner correlation
-        this.wasmEvents.push(Date.now());
+        state.wasmEvents.push(Date.now());
         // Keep only recent events (last 5 minutes)
         const fiveMinAgo = Date.now() - 5 * 60_000;
-        this.wasmEvents = this.wasmEvents.filter(t => t > fiveMinAgo);
+        state.wasmEvents = state.wasmEvents.filter(t => t > fiveMinAgo);
 
         this.db.logEvent({
           timestamp: Date.now(),
@@ -762,7 +775,7 @@ export class ScriptGuard {
           eventType: 'warned',
           severity: 'medium',
           category: 'behavior',
-          details: JSON.stringify({ ...alert, domain, wasmCount: this.wasmEvents.length }),
+          details: JSON.stringify({ ...alert, domain, wasmCount: state.wasmEvents.length }),
           actionTaken: 'flagged',
           confidence: AnalysisConfidence.BEHAVIORAL,
         });
@@ -805,22 +818,44 @@ export class ScriptGuard {
   }
 
   /** Get recent WASM event count (for crypto miner correlation in BehaviorMonitor) */
-  getRecentWasmCount(): number {
+  getRecentWasmCount(wcId?: number): number {
+    const resolvedWcId = wcId ?? this.resolveCurrentWcId();
+    if (!resolvedWcId) return 0;
+    const state = this.getOrCreateTabState(resolvedWcId);
     const fiveMinAgo = Date.now() - 5 * 60_000;
-    this.wasmEvents = this.wasmEvents.filter(t => t > fiveMinAgo);
-    return this.wasmEvents.length;
+    state.wasmEvents = state.wasmEvents.filter(t => t > fiveMinAgo);
+    return state.wasmEvents.length;
   }
 
   /** Get all scripts parsed in this session */
-  getScriptsParsed(): Map<string, { url: string; length: number }> {
-    return this.scriptsParsed;
+  getScriptsParsed(wcId?: number): Map<string, { url: string; length: number }> {
+    const resolvedWcId = wcId ?? this.resolveCurrentWcId();
+    if (!resolvedWcId) return new Map();
+    return this.getOrCreateTabState(resolvedWcId).scriptsParsed;
   }
 
   /** Reset state (call on tab switch) */
-  reset(): void {
-    this.monitorInjected = false;
-    this.scriptsParsed.clear();
-    this.analyzedUrls.clear();
+  reset(wcId?: number): void {
+    if (wcId === undefined) {
+      for (const tabWcId of this.tabStates.keys()) {
+        this.reset(tabWcId);
+      }
+      return;
+    }
+
+    const state = this.getOrCreateTabState(wcId);
+    state.monitorInjected = false;
+    state.scriptsParsed.clear();
+    state.analyzedUrls.clear();
+    state.wasmEvents = [];
+  }
+
+  hasMonitorsInjected(wcId: number): boolean {
+    return this.getOrCreateTabState(wcId).monitorInjected;
+  }
+
+  clearTab(wcId: number): void {
+    this.tabStates.delete(wcId);
   }
 
   private extractDomain(url: string): string | null {
@@ -834,5 +869,25 @@ export class ScriptGuard {
   destroy(): void {
     this.devToolsManager.unsubscribe('ScriptGuard');
     this.devToolsManager.unsubscribe('ScriptGuard:Alerts');
+    this.tabStates.clear();
+  }
+
+  private getOrCreateTabState(wcId: number): ScriptGuardTabState {
+    let state = this.tabStates.get(wcId);
+    if (!state) {
+      state = {
+        monitorInjected: false,
+        scriptsParsed: new Map(),
+        wasmEvents: [],
+        analyzedUrls: new Set(),
+      };
+      this.tabStates.set(wcId, state);
+    }
+    return state;
+  }
+
+  private resolveCurrentWcId(): number | null {
+    const wc = this.devToolsManager.getDispatchWebContents() ?? this.devToolsManager.getAttachedWebContents();
+    return wc?.id ?? null;
   }
 }

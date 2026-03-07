@@ -333,7 +333,7 @@ export function registerIpcHandlers(deps: IpcDeps): void {
     // Attach CDP to the focused tab directly (avoids race with TabManager active tab state)
     if (tab?.webContentsId) {
       await devToolsManager.attachToTab(tab.webContentsId).catch(e => log.warn('devToolsManager.attachToTab failed:', e instanceof Error ? e.message : e));
-      securityManager?.onTabAttached().catch(e => log.warn('securityManager.onTabAttached failed:', e instanceof Error ? e.message : e));
+      securityManager?.onTabAttached(tab.webContentsId).catch(e => log.warn('securityManager.onTabAttached failed:', e instanceof Error ? e.message : e));
     }
     return result;
   });
