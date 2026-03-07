@@ -4,25 +4,6 @@ All notable changes to Tandem Browser will be documented in this file.
 
 ## [v0.44.80] - 2026-03-07
 
-- fix: add containment actions (security-hardening)
-
-What was built/changed:
-- Modified files: src/security/security-manager.ts, src/security/guardian.ts, src/security/script-guard.ts, src/security/behavior-monitor.ts, src/main.ts
-- Modified files: package.json, package-lock.json, CHANGELOG.md, docs/implementations/security-hardening/LEES-MIJ-EERST.md
-- Added automatic containment incidents that quarantine risky tabs, force strict mode, lower trust, and persist evidence snapshots
-- Routed containment to shell-side emergency-stop messaging and a native warning dialog for Robin review
-
-Why this approach:
-- Phase 6 needed a real response path without exposing any security UI inside the page
-- Quarantining at Guardian's request boundary isolates browsing tabs without widening trust for shell, sidebar, or extension traffic
-- Persisting incident evidence in SecurityManager keeps enough forensic context for follow-up review after execution is stopped
-
-Tested:
-- npm run compile: zero errors
-- npx vitest run: fails with pre-existing unrelated failures in src/tabs/tests/tabs.test.ts and src/extensions/tests/action-polyfill.test.ts
-
-## [v0.44.79] - 2026-03-07
-
 ### Changed
 - **Automatic containment responses** (`src/security/security-manager.ts`, `src/security/guardian.ts`, `src/security/script-guard.ts`, `src/security/behavior-monitor.ts`, `src/main.ts`) — turned critical script and runtime detections into real containment actions that quarantine the affected tab, force strict mode, lower trust, and preserve an incident evidence snapshot for later review
 - **Shell-side recovery messaging** (`src/main.ts`) — routed containment incidents through the existing emergency-stop shell path and added a native warning dialog so Robin gets an immediate explanation plus a recovery instruction without exposing any UI inside the page

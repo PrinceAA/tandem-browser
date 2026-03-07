@@ -224,6 +224,6 @@ instead of depending on chat context.
 
 - Status: Complete
 - Date: 2026-03-07
-- Commit: PENDING-IMPLEMENTATION-COMMIT
+- Commit: 7b5d8bb
 - Summary: Added automatic containment orchestration in `class SecurityManager`, quarantined affected browsing tabs through `class Guardian`, turned critical ScriptGuard and BehaviorMonitor detections into real responses, terminated miner-like execution on the affected tab, persisted evidence snapshots for later review, and surfaced shell-side recovery messaging through the existing emergency-stop path plus a native dialog in `main.ts`.
 - Remaining risks for next phase: No remaining phase in this track. Residual post-track risk: containment currently keeps a quarantined tab blocked until Robin closes it or explicitly reopens the site later, so any future UX pass should add a deliberate shell-side review/release control backed by the recorded incident evidence instead of auto-releasing the tab.
