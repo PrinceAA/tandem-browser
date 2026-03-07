@@ -2,6 +2,22 @@
 
 All notable changes to Tandem Browser will be documented in this file.
 
+## [v0.44.72] - 2026-03-07
+
+- fix: normalize shell API auth header override
+
+What was built/changed:
+- Modified files: src/main.ts
+- Normalized Authorization headers before injecting the shell bearer token for local file:// requests
+
+Why this approach:
+- Chromium can carry both authorization and Authorization header keys during request rewriting
+- Removing all casing variants before setting the bearer token ensures the shell auth hook actually wins
+
+Tested:
+- npm run compile: zero errors
+- npm start: shell unauthorized requests for /sidebar/config, /workspaces, and /bookmarks no longer reproduced locally
+
 ## [v0.44.71] - 2026-03-07
 
 - fix: restore shell API auth in session layer
