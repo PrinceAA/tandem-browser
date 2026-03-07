@@ -3,358 +3,428 @@
 > Internal development workflow document. This file exists for local developer
 > and coding-agent operations and is not the primary public project guide.
 
-## Wie ben je?
+## Who Are You?
 
-Je bent een developer agent die werkt aan **Tandem Browser** — een Electron browser voor AI-mens symbiose. User (mens) en Wingman (AI) browsen samen het web. Jij schrijft de code.
+You are a developer agent working on **Tandem Browser**: an Electron browser
+built for human-AI symbiosis. The user (the human) and Wingman (the AI) browse
+the web together. You write the code.
 
-**Lees EERST `PROJECT.md`** — dat is het complete overzicht van wat Tandem is, hoe het werkt, en waarom.
+**Read `PROJECT.md` first.** It contains the full overview of what Tandem is,
+how it works, and why it exists.
 
-## Het project
+## The Project
 
 - **Repo:** `hydro13/tandem-browser` (GitHub: hydro13)
-- **Stack:** Electron 40 + TypeScript + Express.js API (localhost:8765)
-- **Doel:** Browser waar een AI (via HTTP API + WebSocket) en een mens (via UI) samen browsen
-- **Filosofie:** Lokaal, privacy-first, geen cloud dependencies
-- **Omvang:** ~28,750 regels TypeScript (81 bestanden), ~10,190 regels HTML/JS (shell/), 170+ API endpoints, 38 src modules
-- **Tests:** 124 geautomatiseerd (51 security + 73 extensions) via Vitest
-- **Versioning:** See `package.json` and `CHANGELOG.md` for the current release and full history
+- **Stack:** Electron 40 + TypeScript + Express.js API (`localhost:8765`)
+- **Goal:** A browser where an AI (via HTTP API + WebSocket) and a human (via
+  the UI) browse together
+- **Philosophy:** Local-first, privacy-first, no cloud dependencies in the
+  browser itself
+- **Size:** Large TypeScript codebase with a substantial Electron shell,
+  browser API surface, and security stack
+- **Tests:** Vitest coverage for security and extension behavior
+- **Versioning:** See `package.json` and `CHANGELOG.md` for the current release
+  and full history
 
-## Projectstructuur
+## Project Structure
 
-```
+```text
 tandem-browser/
-├── src/                          # 81 TypeScript bestanden, ~28,750 regels
-│   ├── api/server.ts             # Express API (170+ endpoints)
+├── src/                          # TypeScript application code
+│   ├── api/server.ts             # Express API bootstrap
 │   ├── main.ts                   # Electron main process
-│   ├── security/                 # 5-layer shield + intelligence upgrade
-│   ├── extensions/               # Browser extension systeem (12 bestanden)
-│   ├── snapshot/                 # Accessibility tree met @refs
+│   ├── security/                 # 6-layer shield + intelligence upgrade
+│   ├── extensions/               # Browser extension system (12 files)
+│   ├── snapshot/                 # Accessibility tree with @refs
 │   ├── network/                  # Inspector + mocking
-│   ├── sessions/                 # Multi-session isolatie
+│   ├── sessions/                 # Multi-session isolation
 │   ├── mcp/                      # MCP protocol server
 │   ├── agents/                   # TaskManager, X-Scout, TabLockManager
 │   ├── devtools/                 # CDP bridge
-│   └── ...                       # 28 andere modules
-├── shell/                        # Browser UI (~10,190 regels HTML/JS)
+│   └── ...                       # 28 other modules
+├── shell/                        # Browser UI
 ├── cli/                          # tandem CLI (@hydro13/tandem-cli)
 ├── docs/
-│   ├── internal/ROADMAP.md       # ← Sprint planning + feature backlog (internal)
-│   ├── internal/STATUS.md        # ← Daily standup/progress tracker (internal)
-│   ├── templates/                # Templates voor nieuwe features
-│   │   ├── design-template.md    # Template voor design docs (plans/)
-│   │   ├── LEES-MIJ-EERST-template.md  # Template voor implementatie-trajecten
-│   │   └── fase-template.md      # Template voor fase-documenten
-│   ├── implementations/          # Voltooide implementatie-plannen
-│   │   ├── ai-integratie/        # MCP, EventStream, ChatRouter, Autonomie
+│   ├── internal/ROADMAP.md       # Sprint planning + feature backlog (internal)
+│   ├── internal/STATUS.md        # Daily standup/progress tracker (internal)
+│   ├── templates/                # Templates for new features
+│   │   ├── design-template.md    # Template for design docs (plans/)
+│   │   ├── LEES-MIJ-EERST-template.md  # Template for implementation tracks
+│   │   └── fase-template.md      # Template for phase documents
+│   ├── implementations/          # Completed implementation plans
+│   │   ├── ai-integratie/        # MCP, EventStream, ChatRouter, autonomy
 │   │   ├── agent-browser-gaps/   # Snapshot, mock, sessions, CLI
-│   │   ├── linux-portatie/       # Linux portatie roadmap
-│   │   ├── cdp-devtools/         # DevTools Bridge plannen
-│   │   ├── context-menu/         # Context Menu plannen
-│   │   ├── wingman-vision/       # Wingman Vision plannen
+│   │   ├── linux-portatie/       # Linux porting roadmap
+│   │   ├── cdp-devtools/         # DevTools Bridge plans
+│   │   ├── context-menu/         # Context menu plans
+│   │   ├── wingman-vision/       # Wingman Vision plans
 │   │   └── liquid-glass/         # Liquid Glass Lite docs
-│   ├── plans/                    # Niet-geïmplementeerde plannen (design docs)
-│   ├── research/                 # Opera gap analyse + feature inventories
-│   ├── archive/                  # Historische documenten
-│   ├── Browser-extensions/       # Extension systeem (10 phases)
+│   ├── plans/                    # Not-yet-implemented plans (design docs)
+│   ├── research/                 # Opera gap analysis + feature inventories
+│   ├── archive/                  # Historical documents
+│   ├── Browser-extensions/       # Extension system (10 phases)
 │   ├── agent-tools/              # Agent tools (3 phases + phase 4 TBD)
 │   ├── security-fixes/           # Security fixes
 │   ├── security-shield/          # Security Shield (5 layers)
 │   └── security-upgrade/         # Security Intelligence (9 phases)
 ├── scripts/                      # Test & launch scripts
 ├── skill/                        # OpenClaw skill file
-├── release/                      # Build artifacts (DMG, ZIP)
+├── release/                      # Local build artifacts (DMG, ZIP)
 ├── README.md
 ├── PROJECT.md
 ├── CHANGELOG.md
-├── AGENTS.md                     # ← dit bestand
+├── AGENTS.md                     # This file
 └── TODO.md
 ```
 
-## Regels — WAT JE MOET DOEN
+## Rules — What You Must Do
 
-### 1. Lees eerst, bouw dan
-- Lees ALTIJD `TODO.md` voor je begint — weet wat de huidige prioriteiten zijn
-- Lees ALTIJD de bestaande code in `src/` — snap de architectuur
-- Lees `PROJECT.md` voor de visie als je twijfelt over design keuzes
-- Check `docs/implementations/` voor context over voltooide subsystemen
+### 1. Read First, Build Second
 
-### 2. Test je eigen code
-- **Compileer altijd:** `npx tsc` moet FOUTLOOS zijn voor je klaar bent
-- **Start de app:** `npm run dev` en verifieer dat het opstart zonder crashes
-- **Test API endpoints:** Gebruik `curl` om elke nieuwe/gewijzigde endpoint te testen
-- **Test UI:** Neem een screenshot en verifieer visueel dat het er goed uitziet
-- **Run tests:** `npx vitest run` — alle bestaande tests moeten blijven slagen
-- **Rapporteer:** Geef een samenvatting van wat je getest hebt en wat de resultaten waren
+- Always read `TODO.md` before you start so you know the current priorities
+- Always read the existing code in `src/` so you understand the architecture
+- Read `PROJECT.md` if you need vision context for a design choice
+- Check `docs/implementations/` for context on completed subsystems
 
-### 3. Documentatie bijwerken
-- **TODO.md:** Vink af wat je gebouwd hebt, voeg nieuwe items toe als je iets ontdekt
-- **CHANGELOG.md:** Voeg een entry toe per fase/feature die je afrondt
-- **Code comments:** JSDoc voor publieke functies, inline comments voor complexe logica
+### 2. Test Your Own Work
 
-### 4. Git discipline
-- Commit na elke afgeronde sub-feature (niet één mega-commit)
-- Commit messages: emoji + korte beschrijving
-  - `🚲 feat: tab management met groups`
-  - `🛡️ fix: stealth UA mismatch`
-  - `📝 docs: API endpoints bijgewerkt`
-  - `🧪 test: curl tests voor /tabs endpoints`
-- Push naar `origin main` aan het eind
+- **Always compile:** `npx tsc` must be error-free before you finish
+- **Start the app:** `npm run dev` and verify startup without crashes
+- **Test API endpoints:** Use `curl` for every new or changed endpoint
+- **Test the UI:** Take a screenshot and verify it looks correct
+- **Run tests:** `npx vitest run`; all existing tests must keep passing
+- **Report:** Provide a summary of what you tested and the outcomes
 
-### 5. Code kwaliteit
-- **TypeScript strict mode** — geen `any` tenzij echt nodig (en dan met comment waarom)
-- **Error handling** — elke API endpoint vangt errors, geeft JSON terug
-- **Geen hardcoded paths** — gebruik `path.join()`, `app.getPath()`, etc.
-- **Separation of concerns** — elk bestand heeft één verantwoordelijkheid
-- **Naming:** camelCase voor functies/variabelen, PascalCase voor classes, kebab-case voor bestanden
+### 3. Update Documentation
 
-### 6. Verwijzingen naar code — ALTIJD functienamen, NOOIT regelnummers
-- ❌ **Verboden:** "zie server.ts regel 287" — regelnummers veranderen bij elke commit
-- ✅ **Verplicht:** "zie `function startAPI()` in main.ts"
-- ✅ **Verplicht:** "voeg toe aan `class TandemAPI`, `TandemAPIOptions` interface"
-- ✅ **Verplicht:** "zoek naar `// === SECTIE NAAM ===` in shell/index.html"
-- Gebruik `grep -n "function naam" bestand.ts` om de locatie te vinden als je hem niet kent
+- **TODO.md:** Check off completed work and add newly discovered items
+- **CHANGELOG.md:** Add an entry for each completed phase or feature
+- **Code comments:** Use JSDoc for public functions and inline comments for
+  complex logic
 
-## Regels — WAT JE NIET MAG DOEN
+### 4. Git Discipline
 
-### ❌ Absoluut niet
-- **Geen dependencies toevoegen** zonder het te vermelden — elk nieuw package moet goedgekeurd
-- **Geen bestaande endpoints breken** — backward compatibility behouden
-- **Geen data naar externe servers** sturen — alles blijft lokaal
-- **Geen `rm -rf`** of destructieve operaties op het filesystem
-- **Geen secrets/tokens hardcoden** — gebruik environment variables of config files
-- **Geen hele bestanden herschrijven** als een kleine edit volstaat
+- Commit after each completed sub-feature, not as one giant commit
+- Commit message examples:
+  - `feat: tab management with groups`
+  - `fix: stealth UA mismatch`
+  - `docs: update API endpoints`
+  - `test: add curl coverage for /tabs endpoints`
+- Push to `origin main` at the end
 
-### ⚠️ Voorzichtig mee
-- Electron security: `nodeIntegration: false`, `contextIsolation: true` behouden
-- Webview partition: altijd `persist:tandem` gebruiken
-- API alleen binden aan `127.0.0.1` — nooit `0.0.0.0`
-- Stealth patches: niet verwijderen of uitschakelen
+### 5. Code Quality
 
-## ⚔️ ANTI-DETECTIE ARCHITECTUUR — KRITISCH
+- **TypeScript strict mode:** no `any` unless truly necessary, and document why
+- **Error handling:** every API endpoint should catch errors and return JSON
+- **No hardcoded paths:** use `path.join()`, `app.getPath()`, and related APIs
+- **Separation of concerns:** each file should have one clear responsibility
+- **Naming:** camelCase for variables/functions, PascalCase for classes,
+  kebab-case for files
 
-### De Gouden Regel
-**Alles wat Wingman doet moet onzichtbaar zijn vanuit de webpagina's JavaScript context.**
+### 6. References to Code — Always Use Function Names, Never Line Numbers
 
-De website mag ALLEEN zien: "een mens in Chrome op een Mac in België". Wingman staat over Robin's schouder mee te kijken, maar de website weet dat niet.
+- Forbidden: “see `server.ts` line 287” because line numbers change
+- Required: “see `function startAPI()` in `main.ts`”
+- Required: “add it to `class TandemAPI` and the `TandemAPIOptions` interface”
+- Required: “look for `// === SECTION NAME ===` in `shell/index.html`”
+- Use `grep -n "function name" file.ts` if you need to locate something
 
-### Twee-lagen architectuur
-- **Layer 1 (website ziet):** Normale Chromium webview, echte sessie, menselijk gedrag
-- **Layer 2 (onzichtbaar):** Electron main process + shell UI waar Wingman opereert
+## Rules — What You Must Not Do
 
-### Verplichte patronen
+### Absolutely Not
 
-| Wat | ❌ VERBODEN | ✅ VERPLICHT |
-|-----|-----------|------------|
-| Screenshot | Canvas API in webview | `webContents.capturePage()` main process |
-| Click | `el.click()` / `dispatchEvent()` in webview | `webContents.sendInputEvent()` OS-level |
-| Type | `el.value = "text"` in webview | `sendInputEvent({type:'char'})` per karakter |
-| Page lezen | Injected DOM crawler script | `executeJavaScript()` vanuit main process (kort, minimaal) |
-| Draw overlay | Canvas IN de webview | Canvas in de shell BOVEN de webview |
-| Voice | Web Speech API in webview | Web Speech API in de shell |
-| Wingman paneel | iframe/element in webview | Electron panel, apart van webview |
-| Activity track | MutationObserver in pagina | Electron webview events |
+- Do not add dependencies without calling it out; every new package needs
+  approval
+- Do not break existing endpoints; preserve backward compatibility
+- Do not send data to external servers; everything stays local
+- Do not use `rm -rf` or destructive filesystem operations
+- Do not hardcode secrets or tokens; use environment variables or config files
+- Do not rewrite entire files if a focused edit is sufficient
 
-### Wat websites detecteren
-- `Event.isTrusted` — programmatische events = false → gebruik sendInputEvent
-- `document.hasFocus()` — als Wingman panel focus heeft → mock focus behouden
-- `performance.now()` timing — te snel = bot → random delays 80-300ms
-- Injected DOM elements — alles wat niet van de site is → NOOIT in webview
-- WebSocket naar localhost — onze API mag NIET vanuit de webview aangeroepen worden
-- `window.process` / `window.require` — Electron giveaways → MOETEN undefined zijn
-- `navigator.userAgentData` — moet matchen met echte Chrome
-- `localhost:8765` port scan — sites kunnen proberen onze API te detecteren → CORS strict, geen response op cross-origin
+### Be Careful With
 
-### ⚠️ FUNDAMENTELE REGEL: GEEN UNIEKE FINGERPRINT
-Tandem mag NOOIT een herkenbare fingerprint hebben. Als platforms (Meta, Google, LinkedIn)
-Tandem als "AI browser" kunnen identificeren, is het game over voor ALLE gebruikers.
+- Electron security: keep `nodeIntegration: false` and `contextIsolation: true`
+- Webview partition: always use `persist:tandem`
+- API binding: bind only to `127.0.0.1`, never `0.0.0.0`
+- Stealth patches: do not remove or disable them
 
-Tandem moet ononderscheidbaar zijn van echte Chrome op macOS.
-- Elke Electron-specifieke API moet verborgen of gepatcht zijn
-- Geen custom headers, geen custom properties, geen detecteerbare patterns
-- Overweeg migratie naar Chrome Extension model als Electron niet veilig genoeg is
+## Anti-Detection Architecture — Critical
 
-### Headless mode = "minimized met noodrem"
-Background browsing is NOOIT volledig autonoom:
-- Bij detectie/captcha → tab wordt ZICHTBAAR voor Robin
-- Robin lost het op → tab gaat terug naar achtergrond
-- Robin is altijd de noodrem en bodyguard
+### The Golden Rule
 
-### Timing humanisatie — Behavioral Learning
-Tandem leert Robin's gedragspatronen en repliceert die bij automated acties.
+**Everything Wingman does must stay invisible from the web page’s JavaScript
+context.**
 
-**Observation layer** (altijd actief, passief):
-- Track via Electron main process events (NIET in webview)
+The website should only ever see: “a human in Chrome on a Mac in Belgium.”
+Wingman is looking over Robin’s shoulder, but the website must not know that.
+
+### Two-Layer Architecture
+
+- **Layer 1 (visible to the website):** normal Chromium webview, real session,
+  human behavior
+- **Layer 2 (invisible):** Electron main process + shell UI where Wingman
+  operates
+
+### Required Patterns
+
+| Task | Forbidden | Required |
+|-----|-----------|----------|
+| Screenshot | Canvas API in the webview | `webContents.capturePage()` in the main process |
+| Click | `el.click()` / `dispatchEvent()` in the webview | `webContents.sendInputEvent()` at OS level |
+| Type | `el.value = "text"` in the webview | `sendInputEvent({type:'char'})` per character |
+| Read page | Injected DOM crawler script | Minimal `executeJavaScript()` from the main process |
+| Draw overlay | Canvas inside the webview | Canvas in the shell above the webview |
+| Voice | Web Speech API in the webview | Web Speech API in the shell |
+| Wingman panel | iframe/element in the webview | Separate Electron panel outside the webview |
+| Activity tracking | MutationObserver in the page | Electron webview events |
+
+### What Websites Can Detect
+
+- `Event.isTrusted`: programmatic events become `false`, so use
+  `sendInputEvent`
+- `document.hasFocus()`: if the Wingman panel steals focus, mock focus must stay
+  consistent
+- `performance.now()` timing: too fast looks like a bot, so use randomized
+  80-300ms delays
+- Injected DOM elements: anything not from the site itself must never live in
+  the webview
+- WebSocket to localhost: the page must never call our API directly from the
+  webview
+- `window.process` / `window.require`: Electron giveaways must be `undefined`
+- `navigator.userAgentData`: must match real Chrome
+- `localhost:8765` port scans: use strict CORS and no cross-origin responses
+
+### Fundamental Rule: No Unique Fingerprint
+
+Tandem must never have a recognizable fingerprint. If platforms such as Meta,
+Google, or LinkedIn can identify Tandem as an “AI browser,” it is game over for
+all users.
+
+Tandem must be indistinguishable from real Chrome on macOS.
+
+- Every Electron-specific API must be hidden or patched
+- No custom headers, no custom properties, no detectable patterns
+- Consider migration toward a Chrome Extension model if Electron cannot remain
+  stealth-safe enough
+
+### Headless Mode = “Minimized With a Dead-Man Switch”
+
+Background browsing is never fully autonomous:
+
+- On detection or captcha, the tab becomes visible to Robin
+- Robin resolves it, then the tab returns to the background
+- Robin is always the dead-man switch and the bodyguard
+
+### Humanization Timing — Behavioral Learning
+
+Tandem learns Robin’s real behavior patterns and replicates them for automated
+actions.
+
+**Observation layer** (always active, passive):
+
+- Track through Electron main-process events, never inside the webview
 - Mouse movement paths, click delays, scroll patterns, typing rhythm
-- Opslag: `~/.tandem/behavior/` (raw data + gecompileerd profiel)
+- Storage: `~/.tandem/behavior/` (raw data + compiled profile)
 
-**Profiel bevat:**
-- Typing bigram timing (interval per toets-combinatie)
-- Click hesitatie distributie (hover → click delay)
-- Scroll patronen (snelheid, pauzes, leestijd)
-- Muispad curves (Bézier templates)
-- Dagritme variatie (nacht = langzamer)
-- Per-site gedragsclusters
+**The profile contains:**
 
-**Bij automated acties:**
-- Sample uit Robin's echte distributies (niet hardcoded ranges)
-- Muisbewegingen: Bézier curves gebaseerd op geleerde paden
-- Typing: Robin's eigen ritme per toets-combinatie + variatie
-- Fallback (als profiel nog leeg): gaussian random 80-300ms clicks, 30-120ms typing
+- Typing bigram timing (interval per key combination)
+- Click hesitation distribution (hover → click delay)
+- Scroll patterns (speed, pauses, reading time)
+- Mouse path curves (Bezier templates)
+- Day-cycle variation (night = slower)
+- Per-site behavior clusters
 
-**Gouden regel:** Het gedrag moet statistisch ononderscheidbaar zijn van Robin's echte browsing.
+**During automated actions:**
 
-## 💬 Chat Architectuur — BELANGRIJK
+- Sample from Robin’s real distributions, not hardcoded ranges
+- Mouse movement: Bezier curves based on learned paths
+- Typing: Robin’s own key-combination rhythm plus variation
+- Fallback if the profile is still sparse: Gaussian random 80-300ms click
+  delays and 30-120ms typing delays
 
-Het Wingman panel heeft een Chat tab die Robin en Wingman laat communiceren. Deze verbindt **direct via WebSocket** met de OpenClaw gateway (ws://127.0.0.1:18789).
+**Golden rule:** the resulting behavior should be statistically
+indistinguishable from Robin’s real browsing.
 
-### Hoe het werkt
-1. WebSocket naar `ws://127.0.0.1:18789`
-2. Wacht op `connect.challenge` event
-3. Stuur `connect` request met gateway token uit `~/.openclaw/openclaw.json`
-4. Laad history via `chat.history` (sessionKey: `agent:main:main`)
-5. Stuur berichten via `chat.send`
-6. Ontvang streaming updates via `chat` events (state: `delta` → `final`)
+## Chat Architecture — Important
 
-### ⚠️ NIET DOEN — Geleerde Lessen
-We hebben drie andere methoden geprobeerd die NIET werkten:
+The Wingman panel has a Chat tab that lets Robin and Wingman communicate. It
+connects **directly via WebSocket** to the OpenClaw gateway
+(`ws://127.0.0.1:18789`).
 
-1. **❌ Cron polling van localhost:8765/chat** — Te traag (zelfs 15 sec voelt als eeuwigheid), verspilt API tokens bij elke poll
-2. **❌ Iframe embed van OpenClaw webchat** — Server stuurt `X-Frame-Options: DENY` en `Content-Security-Policy: frame-ancestors 'none'`. Zelfs met header stripping via `onHeadersReceived` was er het auth token probleem.
-3. **❌ Webview met localStorage token injectie** — Aparte partition (`persist:openclaw-chat`) deelt geen storage met main partition. Token structuur complex (3 localStorage keys nodig). Te fragiel.
+### How It Works
 
-**✅ Direct WebSocket is de enige juiste aanpak.** Simpel, snel, real-time. De gateway token staat in `~/.openclaw/openclaw.json` → `gateway.auth.token`.
+1. Open a WebSocket to `ws://127.0.0.1:18789`
+2. Wait for the `connect.challenge` event
+3. Send the `connect` request with the gateway token from
+   `~/.openclaw/openclaw.json`
+4. Load history via `chat.history` with session key `agent:main:main`
+5. Send messages via `chat.send`
+6. Receive streaming updates via `chat` events (`delta` → `final`)
 
-### Chat code locatie
-Alle chat WebSocket code zit in `shell/index.html` in de `ocChat` IIFE. Zoek naar `// === OpenClaw WebSocket Chat ===` of `ocChat`.
+### Do Not Do This — Lessons Learned
 
-## 🍎 macOS Quarantine — BELANGRIJK
+We tried three other approaches that did not work:
 
-Electron op macOS wordt geKILLed door Gatekeeper (SIGKILL na ~4 sec) als quarantine flags aanwezig zijn. **ALTIJD** voor het starten:
+1. **Cron polling `localhost:8765/chat`**: too slow, and it wastes API tokens
+   on every poll
+2. **Iframe embedding of OpenClaw webchat**: blocked by `X-Frame-Options: DENY`
+   and `Content-Security-Policy: frame-ancestors 'none'`, plus auth token
+   issues
+3. **Webview with localStorage token injection**: separate partition
+   (`persist:openclaw-chat`) does not share storage with the main partition, and
+   the token structure is too fragile
+
+**Direct WebSocket is the only correct approach.** It is simple, fast, and
+real-time. The gateway token lives in `~/.openclaw/openclaw.json` under
+`gateway.auth.token`.
+
+### Chat Code Location
+
+All chat WebSocket code lives in `shell/index.html` inside the `ocChat` IIFE.
+Look for `// === OpenClaw WebSocket Chat ===` or `ocChat`.
+
+## macOS Quarantine — Important
+
+Electron on macOS gets killed by Gatekeeper (SIGKILL after roughly 4 seconds) if
+quarantine flags are present. **Always** do this before launching:
+
 ```bash
 xattr -cr node_modules/electron/dist/Electron.app
 ```
 
-Dit moet na elke `npm install` of als Electron opnieuw gedownload wordt. Bouw dit in start scripts in.
+Run it after every `npm install` or whenever Electron is re-downloaded. Bake it
+into start scripts.
 
 ## Development Workflow
 
-> Voor nieuwe features: Kees schrijft de docs, Claude Code voert uit.
+> For new features: Kees writes the docs, Claude Code implements them.
 > See `docs/internal/ROADMAP.md` for the active sprint backlog.
 
-```
-1. Lees het fase-bestand voor deze sessie (docs/implementations/{feature}/fase-N.md)
-2. Lees LEES-MIJ-EERST.md in dezelfde map
-3. Lees ALLEEN de bestanden die in het fase-bestand staan — niet meer
-4. Schrijf de code
-5. npx tsc → fix alle type errors
-6. npx vitest run → alle tests moeten slagen
-7. npm start → test handmatig (niet npm run dev!)
-8. curl test elke nieuwe endpoint (zie acceptatiecriteria in fase-bestand)
-9. Update CHANGELOG.md (zie format hieronder)
-10. git commit (zie commit format hieronder)
-11. git push
-12. Rapport: gebouwd / getest / problemen / volgende stap
+```text
+1. Read the phase file for this session (docs/implementations/{feature}/fase-N.md)
+2. Read LEES-MIJ-EERST.md in the same directory
+3. Read only the files listed by the phase file, nothing more
+4. Write the code
+5. Run npx tsc and fix all type errors
+6. Run npx vitest run and keep all tests passing
+7. Run npm start and test manually (not npm run dev)
+8. Use curl to test every new endpoint (see acceptance criteria in the phase file)
+9. Update CHANGELOG.md (see format below)
+10. Create the git commit (see commit format below)
+11. Push
+12. Report: built / tested / problems / next step
 ```
 
-**Sessie-discipline:**
-- Lees ALLEEN wat het fase-bestand zegt — niet wandelen door de codebase
-- Verwijs naar **functienamen**, nooit naar regelnummers
-- Gebruik `grep` om functies te vinden als je de locatie niet weet
+**Session discipline:**
+
+- Read only what the phase file tells you to read; do not wander through the
+  codebase
+- Refer to **function names**, never line numbers
+- Use `grep` to locate functions if you do not know where they are
 
 ---
 
-## Commit Message Format — VERPLICHT
+## Commit Message Format — Required
 
 ### Format
-```
-<type>: <korte beschrijving> (<scope>)
 
-Wat is er gebouwd/veranderd:
-- Nieuwe bestanden: src/sidebar/manager.ts, src/sidebar/types.ts
-- Aangepaste bestanden: src/registry.ts, src/main.ts, src/api/server.ts
-- Nieuwe API endpoints: GET /sidebar/config, POST /sidebar/state, etc.
-- Verwijderde bestanden: (indien van toepassing)
+```text
+<type>: <short description> (<scope>)
 
-Waarom deze aanpak:
-- Korte uitleg van architectuur-keuzes
+What was built/changed:
+- New files: src/sidebar/manager.ts, src/sidebar/types.ts
+- Modified files: src/registry.ts, src/main.ts, src/api/server.ts
+- New API endpoints: GET /sidebar/config, POST /sidebar/state, etc.
+- Deleted files: (if applicable)
 
-Getest:
+Why this approach:
+- Short explanation of the architecture choices
+
+Tested:
 - npx tsc: zero errors
-- npx vitest run: alle tests slagen
-- Handmatig: [wat getest]
+- npx vitest run: all tests pass
+- Manual: [what was tested]
 ```
 
-### Types (bepalen versie bump!)
-| Type | Versie bump | Gebruik |
-|------|-------------|---------|
-| `feat:` | minor (0.15.0 → 0.16.0) | nieuwe feature |
-| `feat!:` | major (0.15.0 → 1.0.0) | breaking change |
-| `fix:` | patch (0.15.0 → 0.15.1) | bugfix |
-| `chore:` | geen | dependencies, build, tooling |
-| `docs:` | geen | documentatie |
-| `refactor:` | geen | code herstructurering |
-| `test:` | geen | tests toevoegen |
+### Types (These Determine the Version Bump)
 
-### ⚠️ BELANGRIJK: Geen emoji VOOR het type prefix
-```
+| Type | Version bump | Use |
+|------|--------------|-----|
+| `feat:` | minor (`0.15.0` → `0.16.0`) | new feature |
+| `feat!:` | major (`0.15.0` → `1.0.0`) | breaking change |
+| `fix:` | patch (`0.15.0` → `0.15.1`) | bug fix |
+| `chore:` | none | dependencies, build, tooling |
+| `docs:` | none | documentation |
+| `refactor:` | none | code restructuring |
+| `test:` | none | tests |
+
+### Important: No Emoji Before the Type Prefix
+
+```text
 ✅ feat: sidebar manager + config API
 ✅ fix: version bump hook matches emoji commits
-❌ 🗂️ feat: sidebar manager  ← emoji breekt auto-versioning hook!
+❌ 🗂️ feat: sidebar manager  ← emoji breaks the auto-versioning hook
 ```
-Emoji MOGEN na de beschrijving: `feat: sidebar manager 🗂️`
 
-### CHANGELOG.md format
-Bij elke `feat:` of `fix:` commit: voeg bovenaan toe:
+Emoji are allowed after the description:
+`feat: sidebar manager 🗂️`
+
+### CHANGELOG.md Format
+
+For every `feat:` or `fix:` commit, add this structure at the top:
+
 ```markdown
 ## [v0.16.0] - 2026-02-28
 
-### Toegevoegd
-- **Sidebar Infrastructuur** (`src/sidebar/`) — SidebarManager met JSON config opslag
+### Added
+- **Sidebar Infrastructure** (`src/sidebar/`) — SidebarManager with JSON config storage
   - 12 sidebar items: 6 utility panels + 6 messenger webviews
   - 6 REST API endpoints (GET/POST /sidebar/config, /state, /reorder, etc.)
-  - 3 sidebar standen: hidden / narrow / wide
-  - Config persistent in `~/.tandem/sidebar-config.json`
+  - 3 sidebar modes: hidden / narrow / wide
+  - Config persisted in `~/.tandem/sidebar-config.json`
 
-### Gewijzigd
-- `src/registry.ts` — `sidebarManager` toegevoegd aan ManagerRegistry
-- `src/main.ts` — SidebarManager instantiatie in startAPI() + will-quit cleanup
-- `src/api/server.ts` — registerSidebarRoutes toegevoegd
+### Changed
+- `src/registry.ts` — added `sidebarManager` to ManagerRegistry
+- `src/main.ts` — SidebarManager instantiation in `startAPI()` + will-quit cleanup
+- `src/api/server.ts` — added `registerSidebarRoutes`
 
-### Technische details
-- Manager patroon: load/save via tandemDir() + ensureDir()
+### Technical Details
+- Manager pattern: load/save via `tandemDir()` + `ensureDir()`
 - 12 default items: workspaces, news, pinboards, bookmarks, history, downloads + 6 messengers
 ```
 
-## Hoe je rapporteert
+## How You Should Report
 
-Na elke sessie, geef:
+After each session, provide:
 
+```text
+## Built
+- [feature 1]: what it does
+- [feature 2]: what it does
+
+## Tested
+- ✅ npx tsc — no errors
+- ✅ npx vitest run — all tests pass
+- ✅ npm run dev — app starts without crashes
+- ✅ curl localhost:8765/new-endpoint — response OK
+- ⚠️ [any issues found]
+
+## Documentation
+- TODO.md updated
+- CHANGELOG.md updated
+
+## Next Step
+- [what is next according to TODO.md]
 ```
-## Gebouwd
-- [feature 1]: wat het doet
-- [feature 2]: wat het doet
 
-## Getest
-- ✅ `npx tsc` — geen errors
-- ✅ `npx vitest run` — alle tests slagen
-- ✅ `npm run dev` — app start, geen crashes
-- ✅ `curl localhost:8765/nieuwe-endpoint` — response OK
-- ⚠️ [eventuele issues gevonden]
+## Communication With Robin
 
-## Documentatie
-- TODO.md bijgewerkt
-- CHANGELOG.md bijgewerkt
+Robin is the product owner. He:
 
-## Volgende stap
-- [wat er nu aan de beurt is volgens TODO.md]
-```
+- Decides design choices when there are multiple valid options
+- Must be informed about new dependencies
+- Tests the UI visually while you test the code
+- Speaks Dutch; code and documentation should be in English
 
-## Communicatie met Robin
-
-Robin is de opdrachtgever. Hij:
-- Beslist over design keuzes als er meerdere opties zijn
-- Moet geïnformeerd worden over nieuwe dependencies
-- Test de UI visueel — jij test de code
-- Praat Nederlands, code en docs zijn Engels
-
-Als je twijfelt → vraag. Liever één keer te veel gevraagd dan een verkeerde aanname.
+If you are unsure, ask. One extra question is better than a wrong assumption.

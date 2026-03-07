@@ -2,6 +2,15 @@
 
 All notable changes to Tandem Browser will be documented in this file.
 
+## [v0.44.57] - 2026-03-07
+
+- docs(repo): translate AGENTS guide to English
+
+Translated the internal `AGENTS.md` workflow guide into English while keeping
+the same project rules, anti-detection constraints, development workflow, and
+reporting expectations. This keeps the maintainer instructions consistent with
+the rest of the repository-facing documentation cleanup.
+
 ## [v0.44.56] - 2026-03-07
 
 - docs(repo): clarify OpenClaw positioning and classify maintainer workflow docs
