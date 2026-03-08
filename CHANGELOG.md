@@ -2,6 +2,10 @@
 
 All notable changes to Tandem Browser will be documented in this file.
 
+## [v0.50.0] - 2026-03-08
+
+- feat: add HAR export for network inspector
+
 ## [v0.49.0] - 2026-03-08
 
 - feat: add quick links shortcut on new tab
