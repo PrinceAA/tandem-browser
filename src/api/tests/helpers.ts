@@ -125,6 +125,34 @@ export function createMockContext(): RouteContext {
       updateConfig: vi.fn().mockReturnValue({}),
     } as any,
 
+    // ── googlePhotosManager ─────────────────────
+    googlePhotosManager: {
+      getStatus: vi.fn().mockReturnValue({
+        enabled: false,
+        clientIdConfigured: false,
+        connected: false,
+        expiresAt: null,
+        lastUploadAt: null,
+      }),
+      getClientId: vi.fn().mockReturnValue(''),
+      setClientId: vi.fn().mockReturnValue({
+        enabled: false,
+        clientIdConfigured: true,
+        connected: false,
+        expiresAt: null,
+        lastUploadAt: null,
+      }),
+      beginAuth: vi.fn().mockReturnValue('https://accounts.google.com/o/oauth2/v2/auth?client_id=test'),
+      completeAuth: vi.fn().mockResolvedValue(undefined),
+      disconnect: vi.fn().mockReturnValue({
+        enabled: false,
+        clientIdConfigured: true,
+        connected: false,
+        expiresAt: null,
+        lastUploadAt: null,
+      }),
+    } as any,
+
     // ── siteMemory ──────────────────────────────
     siteMemory: {
       listSites: vi.fn().mockReturnValue([]),

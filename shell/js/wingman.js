@@ -6,7 +6,10 @@
     }
 
     const overlay = renderer.overlay;
-    const escapeHtml = renderer.escapeHtml;
+    const screenshotButton = document.getElementById('btn-screenshot');
+    const screenshotMenu = document.getElementById('screenshot-menu');
+    const regionOverlay = document.getElementById('region-capture-overlay');
+    const regionBox = document.getElementById('region-capture-box');
 
     function getTabs() {
       return renderer.getTabs();
@@ -28,9 +31,118 @@
     wingmanBadge.style.cursor = 'pointer';
     wingmanBadge.title = 'Right-click for settings';
 
-    // Screenshot toolbar button
-    document.getElementById('btn-screenshot').addEventListener('click', () => {
-      if (window.tandem) window.tandem.quickScreenshot();
+    function closeScreenshotMenu() {
+      screenshotMenu.classList.remove('visible');
+    }
+
+    function openScreenshotMenu() {
+      screenshotMenu.classList.add('visible');
+    }
+
+    function updateRegionBox(startX, startY, currentX, currentY) {
+      const left = Math.min(startX, currentX);
+      const top = Math.min(startY, currentY);
+      const width = Math.abs(currentX - startX);
+      const height = Math.abs(currentY - startY);
+      regionBox.style.display = 'block';
+      regionBox.style.left = `${left}px`;
+      regionBox.style.top = `${top}px`;
+      regionBox.style.width = `${width}px`;
+      regionBox.style.height = `${height}px`;
+    }
+
+    function selectRegion() {
+      return new Promise((resolve) => {
+        let startX = 0;
+        let startY = 0;
+        let dragging = false;
+
+        regionOverlay.classList.add('active');
+        regionBox.style.display = 'none';
+
+        const cleanup = (result = null) => {
+          regionOverlay.classList.remove('active');
+          regionBox.style.display = 'none';
+          regionOverlay.removeEventListener('mousedown', onMouseDown);
+          regionOverlay.removeEventListener('mousemove', onMouseMove);
+          regionOverlay.removeEventListener('mouseup', onMouseUp);
+          window.removeEventListener('keydown', onKeyDown, true);
+          resolve(result);
+        };
+
+        const onMouseDown = (event) => {
+          dragging = true;
+          startX = event.clientX;
+          startY = event.clientY;
+          updateRegionBox(startX, startY, startX, startY);
+        };
+
+        const onMouseMove = (event) => {
+          if (!dragging) return;
+          updateRegionBox(startX, startY, event.clientX, event.clientY);
+        };
+
+        const onMouseUp = (event) => {
+          if (!dragging) return cleanup();
+          dragging = false;
+          const left = Math.min(startX, event.clientX);
+          const top = Math.min(startY, event.clientY);
+          const width = Math.abs(event.clientX - startX);
+          const height = Math.abs(event.clientY - startY);
+          if (width < 4 || height < 4) {
+            cleanup();
+            return;
+          }
+          cleanup({ x: left, y: top, width, height });
+        };
+
+        const onKeyDown = (event) => {
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            cleanup();
+          }
+        };
+
+        regionOverlay.addEventListener('mousedown', onMouseDown);
+        regionOverlay.addEventListener('mousemove', onMouseMove);
+        regionOverlay.addEventListener('mouseup', onMouseUp);
+        window.addEventListener('keydown', onKeyDown, true);
+      });
+    }
+
+    async function captureScreenshotMode(mode) {
+      closeScreenshotMenu();
+      if (!window.tandem) return;
+
+      if (mode === 'region') {
+        const region = await selectRegion();
+        if (!region) return;
+        await window.tandem.captureScreenshot('region', region);
+        return;
+      }
+
+      await window.tandem.captureScreenshot(mode);
+    }
+
+    screenshotButton.addEventListener('click', (event) => {
+      event.stopPropagation();
+      if (screenshotMenu.classList.contains('visible')) {
+        closeScreenshotMenu();
+      } else {
+        openScreenshotMenu();
+      }
+    });
+
+    screenshotMenu.querySelectorAll('[data-screenshot-mode]').forEach((button) => {
+      button.addEventListener('click', () => {
+        void captureScreenshotMode(button.dataset.screenshotMode);
+      });
+    });
+
+    document.addEventListener('click', (event) => {
+      if (!screenshotMenu.contains(event.target) && event.target !== screenshotButton) {
+        closeScreenshotMenu();
+      }
     });
 
     // ═══════════════════════════════════════════════
@@ -183,16 +295,6 @@
         }
       });
 
-      // Screenshot notifications
-      window.tandem.onScreenshotTaken((data) => {
-        const listEl = document.getElementById('screenshot-list');
-        // Remove placeholder text if present
-        const placeholder = listEl.querySelector('p');
-        if (placeholder) placeholder.remove();
-        const div = document.createElement('div');
-        div.innerHTML = `<div class="ss-label">${escapeHtml(data.filename)}</div>`;
-        listEl.prepend(div);
-      });
     }
 
     // ═══════════════════════════════════════════════

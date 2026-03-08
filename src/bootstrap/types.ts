@@ -43,6 +43,7 @@ import type { SessionRestoreManager } from '../session/restore';
 import type { ContentExtractor } from '../content/extractor';
 import type { WorkflowEngine } from '../workflow/engine';
 import type { LoginManager } from '../auth/login-manager';
+import type { GooglePhotosManager } from '../integrations/google-photos';
 
 export interface RuntimeManagers {
   configManager: ConfigManager;
@@ -90,6 +91,7 @@ export interface RuntimeManagers {
   contentExtractor: ContentExtractor;
   workflowEngine: WorkflowEngine;
   loginManager: LoginManager;
+  googlePhotosManager: GooglePhotosManager;
 }
 
 export interface PendingTabRegister {

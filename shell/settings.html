@@ -629,12 +629,31 @@
       <div class="field">
         <div class="field-info">
           <div class="field-label">Google Photos</div>
-          <div class="field-desc">Coming soon</div>
+          <div class="field-desc">Auto-upload screenshots to your Google Photos library</div>
         </div>
         <label class="toggle">
-          <input type="checkbox" id="cfg-googlePhotos" disabled>
+          <input type="checkbox" id="cfg-googlePhotos">
           <span class="slider"></span>
         </label>
+      </div>
+
+      <div class="field" id="field-googlePhotosClientId">
+        <div class="field-info">
+          <div class="field-label">Desktop OAuth Client ID</div>
+          <div class="field-desc">Use your own Google desktop app client ID. Stored locally only.</div>
+        </div>
+        <input type="text" id="cfg-googlePhotosClientId" placeholder="1234567890-abc123.apps.googleusercontent.com" />
+      </div>
+
+      <div class="field">
+        <div class="field-info">
+          <div class="field-label">Connection</div>
+          <div class="field-desc" id="googlePhotosStatus">Not connected</div>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-secondary" id="btn-googlePhotosConnect" type="button">Connect</button>
+          <button class="btn btn-danger" id="btn-googlePhotosDisconnect" type="button">Disconnect</button>
+        </div>
       </div>
     </div>
 
@@ -1046,6 +1065,7 @@
   <script>
     const API = 'http://localhost:8765';
     const quickLinksList = document.getElementById('cfg-quickLinks');
+    let googlePhotosStatus = {};
 
     // ═══ Load config ═══
     let config = {};
@@ -1055,7 +1075,17 @@
         const res = await fetch(`${API}/config`);
         if (res.ok) config = await res.json();
       } catch { /* API not ready */ }
+      await loadGooglePhotosStatus();
       applyConfigToUI();
+    }
+
+    async function loadGooglePhotosStatus() {
+      try {
+        const res = await fetch(`${API}/integrations/google-photos/status`);
+        if (res.ok) googlePhotosStatus = await res.json();
+      } catch {
+        googlePhotosStatus = {};
+      }
     }
 
     function applyConfigToUI() {
@@ -1092,7 +1122,10 @@
       // Screenshots
       setChecked('cfg-localFolder', s.localFolder !== false);
       setChecked('cfg-applePhotos', !!s.applePhotos);
+      setChecked('cfg-googlePhotos', !!s.googlePhotos);
       setVal('cfg-localFolderPath', s.localFolderPath || '~/Pictures/Tandem/');
+      setVal('cfg-googlePhotosClientId', googlePhotosStatus.clientId || '');
+      renderGooglePhotosStatus();
 
       // Voice
       setVal('cfg-voiceLanguage', v.inputLanguage || 'nl-BE');
@@ -1123,6 +1156,28 @@
     function setVal(id, val) { const el = document.getElementById(id); if (el) el.value = val; }
     function setChecked(id, val) { const el = document.getElementById(id); if (el) el.checked = val; }
     function toggleField(id, show) { const el = document.getElementById(id); if (el) el.style.display = show ? 'flex' : 'none'; }
+
+    function renderGooglePhotosStatus() {
+      const statusEl = document.getElementById('googlePhotosStatus');
+      const connectBtn = document.getElementById('btn-googlePhotosConnect');
+      const disconnectBtn = document.getElementById('btn-googlePhotosDisconnect');
+      const enabled = document.getElementById('cfg-googlePhotos').checked;
+      const connected = !!googlePhotosStatus.connected;
+      const configured = !!googlePhotosStatus.clientIdConfigured;
+      if (statusEl) {
+        if (connected) {
+          statusEl.textContent = enabled
+            ? 'Connected and ready to auto-upload screenshots'
+            : 'Connected, but auto-upload is currently disabled';
+        } else if (configured) {
+          statusEl.textContent = 'Client ID saved. Connect Google Photos to finish setup.';
+        } else {
+          statusEl.textContent = 'Add a Google desktop OAuth client ID to connect.';
+        }
+      }
+      if (connectBtn) connectBtn.disabled = !configured;
+      if (disconnectBtn) disconnectBtn.disabled = !connected;
+    }
 
     function appendQuickLinkRow(link = {}) {
       const row = document.createElement('div');
@@ -1216,6 +1271,58 @@
       } catch { showToast('Save failed ✕'); }
     }
 
+    async function saveGooglePhotosClientId() {
+      const clientId = document.getElementById('cfg-googlePhotosClientId').value.trim();
+      try {
+        const res = await fetch(`${API}/integrations/google-photos/config`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ clientId }),
+        });
+        if (res.ok) {
+          googlePhotosStatus = await res.json();
+          renderGooglePhotosStatus();
+          showToast('Saved ✓');
+        }
+      } catch {
+        showToast('Save failed ✕');
+      }
+    }
+
+    async function connectGooglePhotos() {
+      const clientId = document.getElementById('cfg-googlePhotosClientId').value.trim();
+      try {
+        const res = await fetch(`${API}/integrations/google-photos/connect`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ clientId }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || 'Connect failed');
+        }
+        const popup = window.open(data.authUrl, 'google-photos-auth', 'width=520,height=760');
+        if (!popup) {
+          throw new Error('Popup blocked');
+        }
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : 'Connect failed ✕');
+      }
+    }
+
+    async function disconnectGooglePhotos() {
+      try {
+        const res = await fetch(`${API}/integrations/google-photos/disconnect`, { method: 'POST' });
+        if (res.ok) {
+          googlePhotosStatus = await res.json();
+          renderGooglePhotosStatus();
+          showToast('Disconnected ✓');
+        }
+      } catch {
+        showToast('Disconnect failed ✕');
+      }
+    }
+
     function showToast(msg) {
       const t = document.getElementById('toast');
       t.textContent = msg;
@@ -1251,6 +1358,7 @@
     wire('cfg-wingmanPanelDefaultOpen', 'general.wingmanPanelDefaultOpen');
     wire('cfg-localFolder', 'screenshots.localFolder');
     wire('cfg-localFolderPath', 'screenshots.localFolderPath');
+    wire('cfg-googlePhotos', 'screenshots.googlePhotos');
     wire('cfg-voiceLanguage', 'voice.inputLanguage');
     wire('cfg-autoSendOnSilence', 'voice.autoSendOnSilence');
     wire('cfg-theme', 'appearance.theme');
@@ -1267,6 +1375,25 @@
     document.getElementById('btn-addQuickLink').addEventListener('click', () => appendQuickLinkRow());
     document.getElementById('btn-saveQuickLinks').addEventListener('click', () => {
       void saveQuickLinks();
+    });
+    document.getElementById('cfg-googlePhotosClientId').addEventListener('blur', () => {
+      void saveGooglePhotosClientId();
+    });
+    document.getElementById('btn-googlePhotosConnect').addEventListener('click', () => {
+      void connectGooglePhotos();
+    });
+    document.getElementById('btn-googlePhotosDisconnect').addEventListener('click', () => {
+      void disconnectGooglePhotos();
+    });
+    document.getElementById('cfg-googlePhotos').addEventListener('change', () => {
+      renderGooglePhotosStatus();
+    });
+    window.addEventListener('message', (event) => {
+      if (event.data?.type !== 'tandem-google-photos-auth') return;
+      void loadGooglePhotosStatus().then(() => {
+        renderGooglePhotosStatus();
+        showToast(event.data.ok ? 'Google Photos connected ✓' : (event.data.error || 'Connect failed ✕'));
+      });
     });
 
     // Liquid Glass Lite

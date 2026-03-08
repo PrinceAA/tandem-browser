@@ -159,6 +159,35 @@ export function registerIpcHandlers(deps: IpcDeps): void {
     }
   });
 
+  ipcMain.handle('capture-screenshot', async (_event, data: {
+    mode: 'page' | 'application' | 'region';
+    region?: { x: number; y: number; width: number; height: number };
+  }) => {
+    try {
+      const activeTab = tabManager.getActiveTab();
+      const currentUrl = activeTab?.url || 'tandem://window';
+
+      if (data.mode === 'application') {
+        return await drawManager.captureApplicationScreenshot(currentUrl);
+      }
+
+      if (data.mode === 'region') {
+        if (!data.region) {
+          return { ok: false, error: 'Region is required' };
+        }
+        return await drawManager.captureRegionScreenshot(data.region, currentUrl);
+      }
+
+      if (!activeTab) {
+        return { ok: false, error: 'No active tab' };
+      }
+
+      return await drawManager.captureQuickScreenshot(activeTab.webContentsId, activeTab.url);
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  });
+
   // ═══ Voice IPC ═══
   ipcMain.on('voice-transcript', (_event, data: { text: string; isFinal: boolean }) => {
     voiceManager.handleTranscript(data.text, data.isFinal);

@@ -5,6 +5,7 @@ import { WingmanStream } from '../activity/wingman-stream';
 import { TaskManager } from '../agents/task-manager';
 import { TabLockManager } from '../agents/tab-lock-manager';
 import { LoginManager } from '../auth/login-manager';
+import { GooglePhotosManager } from '../integrations/google-photos';
 import { ContextBridge } from '../bridge/context-bridge';
 import { ClaroNoteManager } from '../claronote/manager';
 import { ConfigManager } from '../config/manager';
@@ -126,9 +127,10 @@ export async function initializeRuntimeManagers(opts: InitializeRuntimeOptions):
   const runtime: RuntimeManagers = {} as RuntimeManagers;
 
   runtime.configManager = new ConfigManager();
+  runtime.googlePhotosManager = new GooglePhotosManager(runtime.configManager);
   runtime.tabManager = new TabManager(win);
   runtime.panelManager = new PanelManager(win, runtime.configManager);
-  runtime.drawManager = new DrawOverlayManager(win, runtime.configManager);
+  runtime.drawManager = new DrawOverlayManager(win, runtime.configManager, runtime.googlePhotosManager);
   runtime.wingmanStream = new WingmanStream(runtime.configManager);
   runtime.activityTracker = new ActivityTracker(win, runtime.panelManager, runtime.drawManager, runtime.wingmanStream);
   runtime.voiceManager = new VoiceManager(win, runtime.panelManager);
@@ -311,6 +313,7 @@ export function createManagerRegistry(runtime: RuntimeManagers): ManagerRegistry
     workspaceManager: runtime.workspaceManager,
     syncManager: runtime.syncManager,
     pinboardManager: runtime.pinboardManager,
+    googlePhotosManager: runtime.googlePhotosManager,
   };
 }
 

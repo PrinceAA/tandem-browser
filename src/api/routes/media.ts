@@ -232,6 +232,91 @@ export function registerMediaRoutes(router: Router, ctx: RouteContext): void {
     }
   });
 
+  router.get('/integrations/google-photos/status', (_req: Request, res: Response) => {
+    try {
+      res.json({
+        ...ctx.googlePhotosManager.getStatus(),
+        clientId: ctx.googlePhotosManager.getClientId(),
+      });
+    } catch (e) {
+      handleRouteError(res, e);
+    }
+  });
+
+  router.post('/integrations/google-photos/config', (req: Request, res: Response) => {
+    try {
+      const clientId = typeof req.body?.clientId === 'string' ? req.body.clientId : '';
+      const status = ctx.googlePhotosManager.setClientId(clientId);
+      res.json({
+        ok: true,
+        ...status,
+        clientId: ctx.googlePhotosManager.getClientId(),
+      });
+    } catch (e) {
+      handleRouteError(res, e);
+    }
+  });
+
+  router.post('/integrations/google-photos/connect', (req: Request, res: Response) => {
+    try {
+      const clientId = typeof req.body?.clientId === 'string' ? req.body.clientId.trim() : '';
+      if (clientId) {
+        ctx.googlePhotosManager.setClientId(clientId);
+      }
+      const authUrl = ctx.googlePhotosManager.beginAuth();
+      res.json({ ok: true, authUrl });
+    } catch (e) {
+      handleRouteError(res, e);
+    }
+  });
+
+  router.post('/integrations/google-photos/disconnect', (_req: Request, res: Response) => {
+    try {
+      res.json({
+        ok: true,
+        ...ctx.googlePhotosManager.disconnect(),
+      });
+    } catch (e) {
+      handleRouteError(res, e);
+    }
+  });
+
+  router.get('/google-photos/oauth/callback', async (req: Request, res: Response) => {
+    try {
+      const code = typeof req.query.code === 'string' ? req.query.code : undefined;
+      const state = typeof req.query.state === 'string' ? req.query.state : undefined;
+      const error = typeof req.query.error === 'string' ? req.query.error : undefined;
+      await ctx.googlePhotosManager.completeAuth({ code, state, error });
+      res.type('html').send(`<!doctype html>
+<html>
+  <body style="font-family: sans-serif; padding: 24px;">
+    <h1>Google Photos connected</h1>
+    <p>You can close this window and return to Tandem.</p>
+    <script>
+      if (window.opener) {
+        window.opener.postMessage({ type: 'tandem-google-photos-auth', ok: true }, '*');
+      }
+      window.close();
+    </script>
+  </body>
+</html>`);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      res.status(400).type('html').send(`<!doctype html>
+<html>
+  <body style="font-family: sans-serif; padding: 24px;">
+    <h1>Google Photos connection failed</h1>
+    <p>${message}</p>
+    <script>
+      if (window.opener) {
+        window.opener.postMessage({ type: 'tandem-google-photos-auth', ok: false, error: ${JSON.stringify(message)} }, '*');
+      }
+    </script>
+  </body>
+</html>`);
+    }
+  });
+
   // ═══════════════════════════════════════════════
   // WINGMAN STREAM (Activity Streaming to OpenClaw)
   // ═══════════════════════════════════════════════

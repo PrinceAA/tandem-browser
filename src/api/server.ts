@@ -32,7 +32,7 @@ import type { ExtensionRouteAccessDecision } from '../extensions/manager';
 import { createLogger } from '../utils/logger';
 
 const log = createLogger('TandemAPI');
-const PUBLIC_ROUTE_PATHS = new Set<string>(['/status']);
+const PUBLIC_ROUTE_PATHS = new Set<string>(['/status', '/google-photos/oauth/callback']);
 const TRUSTED_EXTENSION_HTTP_PATHS = new Set<string>([
   ...TRUSTED_EXTENSION_ROUTE_PATHS,
   ...TRUSTED_EXTENSION_PROXY_PATHS,

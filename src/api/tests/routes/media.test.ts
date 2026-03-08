@@ -702,6 +702,71 @@ describe('Media Routes', () => {
     });
   });
 
+  describe('Google Photos integration', () => {
+    it('returns Google Photos status', async () => {
+      vi.mocked(ctx.googlePhotosManager.getStatus).mockReturnValue({
+        enabled: true,
+        clientIdConfigured: true,
+        connected: true,
+        expiresAt: 123,
+        lastUploadAt: '2026-03-08T00:00:00.000Z',
+      } as any);
+      vi.mocked(ctx.googlePhotosManager.getClientId).mockReturnValue('client-id.apps.googleusercontent.com');
+
+      const res = await request(app).get('/integrations/google-photos/status');
+
+      expect(res.status).toBe(200);
+      expect(res.body.connected).toBe(true);
+      expect(res.body.clientId).toBe('client-id.apps.googleusercontent.com');
+    });
+
+    it('stores a Google Photos client id', async () => {
+      const res = await request(app)
+        .post('/integrations/google-photos/config')
+        .send({ clientId: 'client-id.apps.googleusercontent.com' });
+
+      expect(res.status).toBe(200);
+      expect(ctx.googlePhotosManager.setClientId).toHaveBeenCalledWith('client-id.apps.googleusercontent.com');
+    });
+
+    it('starts Google Photos auth', async () => {
+      vi.mocked(ctx.googlePhotosManager.beginAuth).mockReturnValue('https://accounts.google.com/o/oauth2/v2/auth?client_id=test');
+
+      const res = await request(app)
+        .post('/integrations/google-photos/connect')
+        .send({ clientId: 'client-id.apps.googleusercontent.com' });
+
+      expect(res.status).toBe(200);
+      expect(ctx.googlePhotosManager.setClientId).toHaveBeenCalledWith('client-id.apps.googleusercontent.com');
+      expect(res.body.authUrl).toContain('accounts.google.com');
+    });
+
+    it('disconnects Google Photos auth', async () => {
+      const res = await request(app).post('/integrations/google-photos/disconnect').send({});
+
+      expect(res.status).toBe(200);
+      expect(ctx.googlePhotosManager.disconnect).toHaveBeenCalled();
+    });
+
+    it('handles Google Photos oauth callback success', async () => {
+      const res = await request(app).get('/google-photos/oauth/callback?code=abc&state=xyz');
+
+      expect(res.status).toBe(200);
+      expect(ctx.googlePhotosManager.completeAuth).toHaveBeenCalledWith({ code: 'abc', state: 'xyz', error: undefined });
+      expect(res.text).toContain('Google Photos connected');
+    });
+
+    it('returns callback error html when auth fails', async () => {
+      vi.mocked(ctx.googlePhotosManager.completeAuth).mockRejectedValue(new Error('oauth failed'));
+
+      const res = await request(app).get('/google-photos/oauth/callback?code=abc&state=xyz');
+
+      expect(res.status).toBe(400);
+      expect(res.text).toContain('Google Photos connection failed');
+      expect(res.text).toContain('oauth failed');
+    });
+  });
+
   // ═══════════════════════════════════════════════
   // WINGMAN STREAM (Activity Streaming to OpenClaw)
   // ═══════════════════════════════════════════════

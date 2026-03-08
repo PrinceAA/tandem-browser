@@ -87,8 +87,11 @@ contextBridge.exposeInMainWorld('tandem', {
     ipcRenderer.on('draw-clear', handler);
     return () => ipcRenderer.removeListener('draw-clear', handler);
   },
-  onScreenshotTaken: (callback: (data: { path: string; filename: string }) => void) => {
-    const handler = (_event: Electron.IpcRendererEvent, data: { path: string; filename: string }) => callback(data);
+  onScreenshotTaken: (callback: (data: { path: string; filename: string; appPath?: string; base64?: string }) => void) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      data: { path: string; filename: string; appPath?: string; base64?: string },
+    ) => callback(data);
     ipcRenderer.on('screenshot-taken', handler);
     return () => ipcRenderer.removeListener('screenshot-taken', handler);
   },
@@ -96,6 +99,10 @@ contextBridge.exposeInMainWorld('tandem', {
   /** @deprecated Use snapForWingman */
   snapForKees: () => ipcRenderer.invoke('snap-for-wingman'),
   quickScreenshot: () => ipcRenderer.invoke('quick-screenshot'),
+  captureScreenshot: (
+    mode: 'page' | 'application' | 'region',
+    region?: { x: number; y: number; width: number; height: number },
+  ) => ipcRenderer.invoke('capture-screenshot', { mode, region }),
 
   // Voice
   onVoiceToggle: (callback: (data: { listening: boolean }) => void) => {

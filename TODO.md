@@ -26,7 +26,8 @@ Last updated: March 8, 2026
 
 - [ ] `WebSocket /watch/live` for live watch updates
 - [x] Show a notification when the Wingman panel is closed and Wingman replies
-- [ ] Google Photos upload support for screenshots; the settings UI exists, but the upload path does not
+- [x] Google Photos upload support for screenshots; local OAuth client ID setup, connect/disconnect flow, and automatic upload path now exist
+- [x] Screenshot capture modes for `Web Page`, `Application`, and in-app `Region` selection from the main toolbar screenshot button
 - [x] Configurable quick links on the new tab page; links are no longer hardcoded
 - [ ] Configurable diff modes for watches beyond SHA-256 hash comparison
 - [x] HAR export for the network inspector
