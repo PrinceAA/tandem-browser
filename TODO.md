@@ -42,7 +42,8 @@ Last updated: March 8, 2026
 ### Codebase Hygiene
 
 - [x] Split `src/main.ts` bootstrap and teardown wiring into dedicated `src/bootstrap/` modules so manager composition stops growing in one file
-- [ ] Split `shell/index.html`, `shell/js/main.js`, and `shell/css/main.css` into smaller shell modules by surface (`tabs`, `sidebar`, `wingman`, `settings`, layout CSS)
+- [x] Extract the largest shell surfaces out of `shell/index.html` and `shell/css/main.css` so sidebar logic, modal helpers, and stylesheet sections stop living in single inline or monolithic files
+- [ ] Continue splitting `shell/js/main.js` into smaller renderer modules by surface (`tabs`, `wingman`, `settings`, shared renderer state)
 - [ ] Add GitHub Actions verification for `npm run verify` on pushes and pull requests
 
 ## Later
