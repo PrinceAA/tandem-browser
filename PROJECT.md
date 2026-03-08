@@ -6,14 +6,14 @@
 
 Tandem is an Electron-based browser built for human-AI collaboration. The name comes from the tandem bicycle: two riders, one machine, each contributing what the other can't do alone.
 
-The browser runs two things in parallel. The human uses it like any other browser — navigating, logging in, handling captchas, making decisions. The AI has access to a full HTTP API on localhost:8765 with ~200 endpoints for navigation, interaction, data extraction, and automation. OpenClaw is the primary AI runtime Tandem is built around today. Websites see a normal Chrome browser on macOS. They don't see the AI.
+The browser runs two things in parallel. The human uses it like any other browser — navigating, logging in, handling captchas, making decisions. The AI has access to a full HTTP API on `127.0.0.1:8765` with roughly 250 route handlers for navigation, interaction, data extraction, automation, sessions, sync, extensions, and developer tooling. OpenClaw is the primary AI runtime Tandem is built around today. Websites see a normal Chrome browser on macOS. They don't see the AI.
 
 The security layer exists because when an AI has access to your browser, your threat model changes. Every ad network, tracking pixel, and malicious domain is now in your agent's attack surface. Tandem runs a 6-layer security shield before anything reaches the page so OpenClaw can operate with stricter containment than a conventional browser automation stack.
 
 Data stays local. Sessions are isolated. Nothing leaves the machine through Tandem without going through a filter first.
 
 **GitHub:** `hydro13/tandem-browser`  
-**Current version:** see `package.json` and `CHANGELOG.md`  
+**Current version:** `0.45.0`  
 **Started:** February 11, 2026
 
 ---
@@ -40,11 +40,12 @@ Within the product UI, the right-side assistant surface is called the Wingman pa
 │  │  Workspaces (SVG icons)  │  │  Chat / Activity /         │    │
 │  │  Messengers:             │  │  Screenshots / ClaroNote   │    │
 │  │   Telegram, WhatsApp,    │  │                            │    │
-│  │   Discord, Gmail,        │  └───────────────────────────┘    │
+│  │   Discord, Slack, Gmail, │  └───────────────────────────┘    │
 │  │   Calendar, Instagram, X │                                    │
 │  │  Utilities:              │  ┌───────────────────────────┐    │
-│  │   Bookmarks, History,    │  │  Webview (Chromium)       │    │
-│  │   Downloads              │  │                            │    │
+│  │   Pinboards, Bookmarks,  │  │  Webview (Chromium)       │    │
+│  │   History, Downloads,    │  │                            │    │
+│  │   Personal News*         │  │                            │    │
 │  │                          │  │  What websites see:        │    │
 │  │  [resizable, frosted     │  │  "Chrome on macOS, BE"    │    │
 │  │   glass, pin/overlay]    │  │                            │    │
@@ -72,17 +73,20 @@ Within the product UI, the right-side assistant surface is called the Wingman pa
 │  │  FormMemory          Encrypted form field recall            │ │
 │  │  AudioCapture        Tab audio recording                    │ │
 │  │  ExtensionLoader     Chrome extension support               │ │
+│  │  SessionManager      Isolated browsing sessions             │ │
+│  │  PinboardManager     Sidebar pinboards and saved items      │ │
+│  │  SyncManager         Local/export sync surfaces             │ │
 │  └─────────────────────────────────────────────────────────────┘ │
 │                      │                                           │
 │                      ▼                                           │
 │  ┌─────────────────────────────────────────────────────────────┐ │
 │  │  Tandem HTTP API — localhost:8765 (Express)                  │ │
-│  │  ~200 endpoints across 12 route modules                      │ │
+│  │  ~250 route handlers across 16 route modules                 │ │
 │  │                                                               │ │
 │  │  Navigation, Content, Interaction, Tabs, Screenshots         │ │
-│  │  Bookmarks, History, Downloads, Sessions, Workspaces         │ │
-│  │  Security, DevTools (CDP bridge), Device emulation           │ │
-│  │  Network mocking, Script injection, Behavior stats           │ │
+│  │  Sessions, Workspaces, Sidebar, Pinboards, Sync              │ │
+│  │  Security, DevTools (CDP bridge), extensions, agents         │ │
+│  │  Network mocking, script injection, media, data, content     │ │
 │  └─────────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────┘
          │
@@ -97,6 +101,8 @@ Within the product UI, the right-side assistant surface is called the Wingman pa
 └─────────────────────┘
 ```
 
+`* Personal News currently exists as a sidebar slot and planned surface, not as a fully implemented panel experience yet.`
+
 ---
 
 ## Security System
@@ -105,7 +111,7 @@ Six independent layers that run before anything reaches the page:
 
 | Layer | Name | What it does |
 |-------|------|-------------|
-| 1 | NetworkShield | 811,000+ blocklist entries (URLhaus, PhishTank, Steven Black). Blocks at request level, 0.03ms decision time |
+| 1 | NetworkShield | Curated phishing, malware, and malicious-infrastructure feeds (URLhaus, Phishing Database, OpenPhish, ThreatFox, Steven Black). Blocks at request level before page load |
 | 2 | OutboundGuard | Scans POST body for credential exfiltration, blocks known tracker domains |
 | 3 | ContentAnalyzer | Typosquatting detection, script analysis, risk score 0-100 per page |
 | 4 | ScriptGuard | CDP-based script fingerprinting, detects keyloggers and crypto miners |
@@ -142,10 +148,10 @@ Opera-style sidebar on the left. Three sections:
 Named tab groups with 24-icon SVG picker (Heroicons outline). Create, edit, rename, delete. Drag tabs from the tab bar onto a workspace icon to move them. Right-click any tab for the full context menu including "Move to Workspace."
 
 **Communication**
-Persistent webview panels for Telegram, WhatsApp, Discord, Gmail, Calendar, Instagram, X. Each panel has its own isolated browser session (own cookies, localStorage, cache). Panels are resizable with per-module width persistence. Frosted glass overlay mode or pinned push mode.
+Persistent webview panels for Telegram, WhatsApp, Discord, Slack, Gmail, Calendar, Instagram, and X. Each panel has its own isolated browser session (own cookies, localStorage, cache). Panels are resizable with per-module width persistence. Frosted glass overlay mode or pinned push mode.
 
 **Utilities**
-Bookmarks (full tree, search, folder navigation), History, Downloads.
+Pinboards, Bookmarks (full tree, search, folder navigation), History, Downloads, plus a `Personal News` sidebar slot that is currently a placeholder for future design and implementation work.
 
 Sidebar toggle: `Cmd+Shift+B`. Setup panel (⚙️) to enable/disable individual items.
 
@@ -185,21 +191,27 @@ Close Tabs to the Right
 
 ## API Overview
 
-All endpoints require the `Authorization: Bearer <token>` header (token in `~/.tandem/config.json`). Localhost requests bypass auth.
+Most endpoints require the `Authorization: Bearer <token>` header. The token is stored in `~/.tandem/api-token`. `/status` is public, and a narrow set of helper routes is also available to installed extensions under explicit route-level checks.
 
-Route modules:
-- `browser.ts` — navigation, page content, screenshots
-- `tabs.ts` — tab management, groups
-- `workspaces.ts` — workspace CRUD + tab assignment
-- `bookmarks.ts` — bookmark tree, search, CRUD
-- `history.ts` — history search and management
-- `downloads.ts` — download tracking
-- `sessions.ts` — isolated browser sessions
-- `security.ts` — blocklist status, risk scores, alerts
+Current route modules:
+- `browser.ts` — navigation, screenshots, page actions
+- `tabs.ts` — tab management, groups, focus
+- `snapshots.ts` — accessibility tree and `@ref` interaction surfaces
 - `devtools.ts` — CDP bridge (console, network, DOM, storage)
-- `behavior.ts` — behavior stats and pattern data
-- `chat.ts` — local chat relay
-- `snapshots.ts` — accessibility tree + agent interaction refs
+- `extensions.ts` — extension management and helper routes
+- `network.ts` — mocking and network tooling
+- `sessions.ts` — isolated sessions, session fetch relay, saved session state
+- `agents.ts` — agent workflow endpoints
+- `data.ts` — bookmarks, history, downloads, and import/export surfaces
+- `content.ts` — content extraction and page-to-markdown style helpers
+- `media.ts` — screenshots, audio capture, and related media endpoints
+- `misc.ts` — settings, watch routes, passwords, and smaller utility endpoints
+- `sidebar.ts` — sidebar config, state, ordering, activation
+- `workspaces.ts` — workspace CRUD and tab assignment
+- `sync.ts` — sync surfaces
+- `pinboards.ts` — pinboard CRUD and panel data
+
+Security routes are registered separately from `src/security/routes.ts`.
 
 ---
 
@@ -208,12 +220,16 @@ Route modules:
 ```
 src/main.ts                    App lifecycle, window, IPC, menu
 src/api/server.ts              API setup + route registration
-src/api/routes/                12 route modules
+src/api/routes/                16 route modules
+src/security/routes.ts         Security-specific API routes
 src/security/                  6-layer security system
 src/stealth/manager.ts         Anti-fingerprint patches
 src/tabs/manager.ts            Tab management
 src/sidebar/manager.ts         Sidebar config + state
 src/workspaces/manager.ts      Workspace CRUD + tab mapping
+src/sessions/manager.ts        Isolated session registry
+src/pinboards/manager.ts       Pinboard persistence and panel data
+src/sync/manager.ts            Sync and export surfaces
 src/config/manager.ts          Settings
 src/behavior/observer.ts       Behavioral learning
 src/content/extractor.ts       Smart page-to-markdown
@@ -233,28 +249,16 @@ shell/css/main.css             All shell styles
 npm install
 
 # Build TypeScript
-npx tsc
+npm run compile
 
-# Run (macOS: clear quarantine first)
-xattr -cr node_modules/electron/dist/Electron.app
-npx electron .
+# Run
+npm start
 
 # API
-curl http://localhost:8765/status
+curl http://127.0.0.1:8765/status
 ```
 
-**macOS note:** Electron binaries get quarantined by Gatekeeper. Run `xattr -cr` before starting, or the process will be killed silently.
-
----
-
-## Build History
-
-| Date | Versions | What was built |
-|------|----------|---------------|
-| Feb 11 | v0.1–v0.14 | Full foundation: tabs, stealth, 6-layer security, Chrome import, site memory, scheduled watches, headless mode, form memory, context bridge, PiP, network inspector, ClaroNote, workflow engine, audio capture, extension support |
-| Feb 26–27 | — | Refactor: API split into 12 route modules, ManagerRegistry, 739 integration tests, type safety overhaul, security hardening |
-| Feb 28 | v0.15–v0.22 | Sidebar: SidebarManager, icon strip, 3-section layout, Gmail/Calendar, setup panel, pin/overlay toggle, persistent messenger webviews, resizable panels, frosted glass |
-| Mar 1 | v0.23–v0.29 | Gmail auth fix, bookmarks panel, workspace manager + UI, Opera-style icon picker, drag-drop tab move, full right-click context menu |
+**macOS note:** `npm start` already clears Electron quarantine flags before launch. If Electron is re-downloaded or started outside the provided scripts, run `xattr -cr node_modules/electron/dist/Electron.app` first or macOS may terminate the process silently.
 
 ---
 
