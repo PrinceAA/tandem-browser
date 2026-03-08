@@ -32,72 +32,72 @@ Within the product UI, the right-side assistant surface is called the Wingman pa
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  Tandem Browser (Electron 40)                                    │
-│                                                                   │
+│  Tandem Browser (Electron 40)                                   │
+│                                                                 │
 │  ┌──────────────────────────┐  ┌───────────────────────────┐    │
-│  │  Sidebar (shell)          │  │  Wingman Panel (shell)    │    │
-│  │                          │  │                            │    │
-│  │  Workspaces (SVG icons)  │  │  Chat / Activity /         │    │
-│  │  Messengers:             │  │  Screenshots / ClaroNote   │    │
-│  │   Telegram, WhatsApp,    │  │                            │    │
+│  │  Sidebar (shell)         │  │  Wingman Panel (shell)    │    │
+│  │                          │  │                           │    │
+│  │  Workspaces (SVG icons)  │  │  Chat / Activity /        │    │
+│  │  Messengers:             │  │  Screenshots / ClaroNote  │    │
+│  │   Telegram, WhatsApp,    │  │                           │    │
 │  │   Discord, Slack, Gmail, │  └───────────────────────────┘    │
-│  │   Calendar, Instagram, X │                                    │
+│  │   Calendar, Instagram, X │                                   │
 │  │  Utilities:              │  ┌───────────────────────────┐    │
 │  │   Pinboards, Bookmarks,  │  │  Webview (Chromium)       │    │
-│  │   History, Downloads,    │  │                            │    │
-│  │   Personal News*         │  │                            │    │
-│  │                          │  │  What websites see:        │    │
+│  │   History, Downloads,    │  │                           │    │
+│  │   Personal News*         │  │                           │    │
+│  │                          │  │  What websites see:       │    │
 │  │  [resizable, frosted     │  │  "Chrome on macOS, BE"    │    │
-│  │   glass, pin/overlay]    │  │                            │    │
+│  │   glass, pin/overlay]    │  │                           │    │
 │  └──────────────────────────┘  └───────────────────────────┘    │
-│                                                                   │
-│  ┌─────────────────────────────────────────────────────────────┐ │
-│  │  Electron Main Process                                       │ │
-│  │                                                               │ │
-│  │  SecurityManager     6-layer shield (see below)             │ │
-│  │  StealthManager      Anti-fingerprint patches               │ │
-│  │  TabManager          Multi-tab, groups, shortcuts           │ │
-│  │  SidebarManager      Sidebar config + panel routing         │ │
-│  │  WorkspaceManager    Named tab groups + persistence         │ │
-│  │  BookmarkManager     Tree, search, CRUD                     │ │
-│  │  HistoryManager      Full-text search, Cmd+Y                │ │
-│  │  DownloadManager     Progress, pause, resume                │ │
-│  │  ChromeImporter      Bookmarks, history, cookies            │ │
-│  │  BehaviorObserver    Learn user patterns                    │ │
-│  │  ContentExtractor    Smart page-to-markdown                 │ │
-│  │  WorkflowEngine      Multi-step automation                  │ │
-│  │  ClaroNoteManager    Voice-to-text integration              │ │
-│  │  SiteMemory          Per-site persistent notes              │ │
-│  │  WatchManager        Scheduled page monitoring              │ │
-│  │  HeadlessManager     Background browsing + kill switch      │ │
-│  │  FormMemory          Encrypted form field recall            │ │
-│  │  AudioCapture        Tab audio recording                    │ │
-│  │  ExtensionLoader     Chrome extension support               │ │
-│  │  SessionManager      Isolated browsing sessions             │ │
-│  │  PinboardManager     Sidebar pinboards and saved items      │ │
-│  │  SyncManager         Local/export sync surfaces             │ │
-│  └─────────────────────────────────────────────────────────────┘ │
-│                      │                                           │
-│                      ▼                                           │
-│  ┌─────────────────────────────────────────────────────────────┐ │
-│  │  Tandem HTTP API — localhost:8765 (Express)                  │ │
-│  │  ~250 route handlers across 16 route modules                 │ │
-│  │                                                               │ │
-│  │  Navigation, Content, Interaction, Tabs, Screenshots         │ │
-│  │  Sessions, Workspaces, Sidebar, Pinboards, Sync              │ │
-│  │  Security, DevTools (CDP bridge), extensions, agents         │ │
-│  │  Network mocking, script injection, media, data, content     │ │
-│  └─────────────────────────────────────────────────────────────┘ │
+│                                                                 │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │  Electron Main Process                                     │ │
+│  │                                                            │ │
+│  │  SecurityManager     6-layer shield (see below)            │ │
+│  │  StealthManager      Anti-fingerprint patches              │ │
+│  │  TabManager          Multi-tab, groups, shortcuts          │ │
+│  │  SidebarManager      Sidebar config + panel routing        │ │
+│  │  WorkspaceManager    Named tab groups + persistence        │ │
+│  │  BookmarkManager     Tree, search, CRUD                    │ │
+│  │  HistoryManager      Full-text search, Cmd+Y               │ │
+│  │  DownloadManager     Progress, pause, resume               │ │
+│  │  ChromeImporter      Bookmarks, history, cookies           │ │
+│  │  BehaviorObserver    Learn user patterns                   │ │
+│  │  ContentExtractor    Smart page-to-markdown                │ │
+│  │  WorkflowEngine      Multi-step automation                 │ │
+│  │  ClaroNoteManager    Voice-to-text integration             │ │
+│  │  SiteMemory          Per-site persistent notes             │ │
+│  │  WatchManager        Scheduled page monitoring             │ │
+│  │  HeadlessManager     Background browsing + kill switch     │ │
+│  │  FormMemory          Encrypted form field recall           │ │
+│  │  AudioCapture        Tab audio recording                   │ │
+│  │  ExtensionLoader     Chrome extension support              │ │
+│  │  SessionManager      Isolated browsing sessions            │ │
+│  │  PinboardManager     Sidebar pinboards and saved items     │ │
+│  │  SyncManager         Local/export sync surfaces            │ │
+│  └────────────────────────────────────────────────────────────┘ │
+│                      │                                          │
+│                      ▼                                          │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │  Tandem HTTP API — localhost:8765 (Express)                │ │
+│  │  ~250 route handlers across 16 route modules               │ │
+│  │                                                            │ │
+│  │  Navigation, Content, Interaction, Tabs, Screenshots       │ │
+│  │  Sessions, Workspaces, Sidebar, Pinboards, Sync            │ │
+│  │  Security, DevTools (CDP bridge), extensions, agents       │ │
+│  │  Network mocking, script injection, media, data, content   │ │
+│  └────────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────┘
          │
          │ HTTP / fetch / curl
          ▼
 ┌─────────────────────┐
-│  AI Agent (OpenClaw) │
-│                      │
-│  Uses the API to     │
-│  browse, extract,    │
-│  automate, observe   │
+│  AI Agent (OpenClaw)│
+│                     │
+│  Uses the API to    │
+│  browse, extract,   │
+│  automate, observe  │
 └─────────────────────┘
 ```
 
@@ -264,6 +264,6 @@ curl http://127.0.0.1:8765/status
 
 ## Related Projects
 
-- **OpenClaw** — AI gateway the agent runs on (localhost:18789)
+- **OpenClaw** — AI gateway the agent runs on
 - **ClaroNote** — Voice-to-text SaaS, natively integrated in Tandem
-- **Kanbu** — Project management tool (app.kanbu.be)
+- **Kanbu** — Project management tool 
