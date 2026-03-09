@@ -14,6 +14,15 @@
     <div class="region-capture-box" id="region-capture-box"></div>
   </div>
 
+  <!-- Recording overlay bar -->
+  <div id="recording-overlay-bar" class="recording-overlay-bar">
+    <span class="recording-dot"></span>
+    <span id="recording-timer" class="recording-timer">0:00</span>
+    <button id="recording-mic-toggle" class="recording-mic-btn" title="Toggle microphone">🎤 On</button>
+    <div class="recording-separator"></div>
+    <button id="recording-stop-btn" class="recording-stop-btn" title="Stop recording (Esc)">■ Stop</button>
+  </div>
+
   <!-- Tab bar (Chrome-style compact title bar) -->
   <div class="tab-bar" id="tab-bar">
     <button class="menu-btn" id="btn-app-menu" title="Menu">☰</button>
@@ -406,6 +415,7 @@
   <script src="js/wingman.js"></script>
   <script src="js/claronote.js"></script>
   <script src="js/extensions.js"></script>
+  <script src="js/video-recorder.js"></script>
   <script src="js/shortcut-router.js"></script>
 
   <!-- Keyboard Shortcuts Overlay -->

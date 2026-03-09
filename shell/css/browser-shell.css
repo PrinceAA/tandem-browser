@@ -1021,3 +1021,70 @@
       color: var(--text);
       background: rgba(255, 255, 255, 0.1);
     }
+
+/* ── Recording overlay bar ── */
+.recording-overlay-bar {
+  display: none;
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100000;
+  background: rgba(7, 10, 18, 0.88);
+  border: 1px solid rgba(233, 69, 96, 0.5);
+  border-radius: 8px;
+  padding: 6px 16px;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--text-primary);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  user-select: none;
+  -webkit-app-region: no-drag;
+}
+.recording-overlay-bar.active {
+  display: flex;
+}
+.recording-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #e94560;
+  animation: recording-pulse 1s ease-in-out infinite;
+}
+@keyframes recording-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+.recording-timer {
+  font-variant-numeric: tabular-nums;
+  min-width: 3em;
+}
+.recording-mic-btn,
+.recording-stop-btn {
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--text-primary);
+  border-radius: 4px;
+  padding: 3px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background 0.15s;
+}
+.recording-mic-btn:hover,
+.recording-stop-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.recording-stop-btn {
+  border-color: rgba(233, 69, 96, 0.5);
+  color: #e94560;
+}
+.recording-stop-btn:hover {
+  background: rgba(233, 69, 96, 0.15);
+}
+.recording-separator {
+  width: 1px;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.15);
+}
