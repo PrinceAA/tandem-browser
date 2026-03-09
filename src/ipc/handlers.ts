@@ -257,9 +257,14 @@ export function registerIpcHandlers(deps: IpcDeps): void {
 
   // ═══ Desktop Source for Renderer Video Capture ═══
   ipcMain.handle('get-desktop-source', async () => {
-    const sources = await desktopCapturer.getSources({ types: ['window'], fetchWindowIcons: false });
-    const tandemSource = sources.find((s: Electron.DesktopCapturerSource) => s.name.includes('Tandem')) || sources[0];
-    return tandemSource ? { id: tandemSource.id, name: tandemSource.name } : null;
+    try {
+      const sources = await desktopCapturer.getSources({ types: ['window'], fetchWindowIcons: false });
+      const tandemSource = sources.find((s: Electron.DesktopCapturerSource) => s.name.includes('Tandem')) || sources[0];
+      return tandemSource ? { id: tandemSource.id, name: tandemSource.name } : null;
+    } catch (error) {
+      log.warn('Failed to get desktop sources (Wayland screencast may not be supported):', error instanceof Error ? error.message : error);
+      return null;
+    }
   });
 
   // ═══ Voice IPC ═══

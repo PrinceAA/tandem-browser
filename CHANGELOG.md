@@ -2,6 +2,15 @@
 
 All notable changes to Tandem Browser will be documented in this file.
 
+## [Unreleased]
+
+- fix: Linux video recorder compatibility with Wayland/Pipewire
+  - Use native `getDisplayMedia()` on Linux instead of Electron's `desktopCapturer` to avoid Wayland screencast portal conflicts
+  - Add error handling for `get-desktop-source` IPC to prevent renderer crashes
+  - Fix stop button event bubbling (prevent double-click triggering fullscreen)
+  - Add debug logging for audio track detection
+  - **Known limitation:** Tab/webview audio capture not working on Linux due to Electron process isolation; mic audio works correctly
+
 ## [v0.57.0] - 2026-03-09
 
 - feat: built-in video recorder with Application and Region modes

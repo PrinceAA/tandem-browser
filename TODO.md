@@ -14,7 +14,7 @@ Last updated: March 8, 2026
 
 ## Current Snapshot
 
-- Current app version: `0.51.0`
+- Current app version: `0.57.0`
 - The codebase scope is larger than this backlog summary and includes major subsystems such as `sidebar`, `workspaces`, `pinboards`, `sync`, `headless`, and `sessions`.
 - Scheduled browsing already exists in baseline form via `WatchManager` and the `/watch/*` API routes.
 - Session isolation already exists in baseline form via `SessionManager` and the `/sessions/*` API routes.
@@ -33,6 +33,7 @@ Last updated: March 8, 2026
 - [x] HAR export for the network inspector
 - [ ] Design and build the `Personal News` experience; the sidebar currently has a placeholder slot, but the actual panel and feed model are not implemented yet
 - [x] Built-in video recorder with Application and Region capture modes, tab audio + mic toggle, MP4 output via ffmpeg; replaces AudioCaptureManager
+- [ ] Linux video recorder: implement desktop audio capture via PulseAudio/Pipewire monitor sources; current implementation captures mic audio but not webview/tab audio due to Electron process isolation limitations on Linux
 
 ### Maintenance Sweep
 

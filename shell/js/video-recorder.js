@@ -103,24 +103,48 @@
 
   async function startRecording(mode, region) {
     try {
-      // Get Tandem window source ID from main process
-      const source = await window.tandem.getDesktopSource();
-      if (!source) {
-        console.error('[video-recorder] No desktop source found');
-        return;
-      }
-
-      // Get video stream
-      mediaStream = await navigator.mediaDevices.getUserMedia({
-        audio: false,
-        video: {
-          mandatory: {
-            chromeMediaSource: 'desktop',
-            chromeMediaSourceId: source.id,
-            maxFrameRate: 30,
+      // On Linux, use native getDisplayMedia (system picker) instead of desktopCapturer
+      // to avoid Wayland/Pipewire portal conflicts
+      const isLinux = navigator.userAgent.includes('Linux');
+      
+      let mediaStream;
+      
+      if (isLinux) {
+        // Native system picker (Wayland/Pipewire compatible)
+        mediaStream = await navigator.mediaDevices.getDisplayMedia({
+          video: {
+            cursor: 'never',
+            frameRate: 30,
           },
-        },
-      });
+          audio: true, // Request system audio (tab/window audio)
+        });
+        
+        console.log('[video-recorder] getDisplayMedia result:');
+        console.log('  Video tracks:', mediaStream.getVideoTracks().length);
+        console.log('  Audio tracks:', mediaStream.getAudioTracks().length);
+        mediaStream.getAudioTracks().forEach((track, i) => {
+          console.log(`  Audio track ${i}:`, track.label, 'enabled:', track.enabled, 'muted:', track.muted);
+        });
+      } else {
+        // macOS/Windows: use Electron desktopCapturer
+        const source = await window.tandem.getDesktopSource();
+        if (!source) {
+          console.error('[video-recorder] No desktop source found');
+          alert('Screen recording is not available.');
+          return;
+        }
+
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: {
+            mandatory: {
+              chromeMediaSource: 'desktop',
+              chromeMediaSourceId: source.id,
+              maxFrameRate: 30,
+            },
+          },
+        });
+      }
 
       // If region mode, crop via canvas
       let recordStream = mediaStream;
@@ -154,22 +178,29 @@
         drawFrame();
 
         recordStream = canvas.captureStream(30);
+        
+        // Preserve audio tracks from original stream (Linux: getDisplayMedia includes audio)
+        if (isLinux) {
+          mediaStream.getAudioTracks().forEach(t => recordStream.addTrack(t));
+        }
       }
 
-      // Try to add tab audio
-      try {
-        const tabAudio = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            mandatory: {
-              chromeMediaSource: 'desktop',
-              chromeMediaSourceId: source.id,
+      // Try to add tab audio (macOS/Windows only - Linux gets it via getDisplayMedia)
+      if (!isLinux) {
+        try {
+          const tabAudio = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              mandatory: {
+                chromeMediaSource: 'desktop',
+                chromeMediaSourceId: source.id,
+              },
             },
-          },
-          video: false,
-        });
-        tabAudio.getAudioTracks().forEach(t => recordStream.addTrack(t));
-      } catch (e) {
-        console.warn('[video-recorder] Tab audio not available:', e.message);
+            video: false,
+          });
+          tabAudio.getAudioTracks().forEach(t => recordStream.addTrack(t));
+        } catch (e) {
+          console.warn('[video-recorder] Tab audio not available:', e.message);
+        }
       }
 
       // Add mic audio (optional)
@@ -222,14 +253,30 @@
   }
 
   async function stopRecording() {
-    if (!isRecording || !mediaRecorder) return;
+    console.log('[video-recorder] stopRecording called, isRecording:', isRecording, 'mediaRecorder:', !!mediaRecorder);
+    if (!isRecording || !mediaRecorder) {
+      console.warn('[video-recorder] Not recording or no mediaRecorder');
+      return;
+    }
+    
     isRecording = false;
-    mediaRecorder.stop();
+    
+    // Stop UI immediately (don't wait for backend)
     stopTimer();
     overlayBar.classList.remove('active');
+    
+    // Stop MediaRecorder
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.stop();
+    }
 
-    // Tell main to finalize (ffmpeg conversion)
-    await window.tandem.stopRecording();
+    // Tell main to finalize (ffmpeg conversion) - non-blocking
+    try {
+      await window.tandem.stopRecording();
+      console.log('[video-recorder] Backend stop completed');
+    } catch (err) {
+      console.error('[video-recorder] Backend stop failed:', err);
+    }
   }
 
   function cleanupStreams() {
@@ -248,9 +295,14 @@
 
   // ── UI handlers ──
 
-  stopBtn.addEventListener('click', () => stopRecording());
+  stopBtn.addEventListener('click', (e) => {
+    e.stopPropagation(); // Prevent bubbling to titlebar double-click handler
+    console.log('[video-recorder] Stop button clicked!');
+    stopRecording();
+  });
 
-  micBtn.addEventListener('click', () => {
+  micBtn.addEventListener('click', (e) => {
+    e.stopPropagation(); // Prevent bubbling
     micEnabled = !micEnabled;
     micBtn.textContent = micEnabled ? '🎤 On' : '🎤 Off';
     micBtn.style.opacity = micEnabled ? '1' : '0.5';
