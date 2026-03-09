@@ -2,6 +2,13 @@
 
 All notable changes to Tandem Browser will be documented in this file.
 
+## [v0.57.0] - 2026-03-09
+
+- feat: built-in video recorder with Application and Region modes
+
+Replaces AudioCaptureManager with VideoRecorderManager. Uses
+desktopCapturer + MediaRecorder → WebM → ffmpeg → MP4 pipeline.
+
 ## [v0.56.0] - 2026-03-09
 
 - feat: implement renderer-side video recorder with region crop and audio
