@@ -267,9 +267,19 @@ export function registerIpcHandlers(deps: IpcDeps): void {
           return { error: 'screen-permission-denied' };
         }
       }
-      const sources = await desktopCapturer.getSources({ types: ['window'], fetchWindowIcons: false });
-      const tandemSource = sources.find((s: Electron.DesktopCapturerSource) => s.name.includes('Tandem')) || sources[0];
-      return tandemSource ? { id: tandemSource.id, name: tandemSource.name } : null;
+      // Get window source for video
+      const windowSources = await desktopCapturer.getSources({ types: ['window'], fetchWindowIcons: false });
+      const tandemSource = windowSources.find((s: Electron.DesktopCapturerSource) => s.name.includes('Tandem')) || windowSources[0];
+
+      // Get screen source for audio (window sources don't include audio on macOS)
+      const screenSources = await desktopCapturer.getSources({ types: ['screen'], fetchWindowIcons: false });
+      const screenSource = screenSources[0];
+
+      return tandemSource ? {
+        id: tandemSource.id,
+        name: tandemSource.name,
+        audioSourceId: screenSource?.id || null,
+      } : null;
     } catch (error) {
       log.warn('Failed to get desktop sources:', error instanceof Error ? error.message : error);
       return null;

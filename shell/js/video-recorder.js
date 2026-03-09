@@ -190,21 +190,24 @@
         }
       }
 
-      // Try to add tab audio (macOS/Windows only - Linux gets it via getDisplayMedia)
+      // Try to add system/tab audio (macOS/Windows only - Linux gets it via getDisplayMedia)
+      // On macOS, window sources don't include audio — use screen source instead
       if (!isLinux) {
+        const audioSourceId = source.audioSourceId || source.id;
         try {
           const tabAudio = await navigator.mediaDevices.getUserMedia({
             audio: {
               mandatory: {
                 chromeMediaSource: 'desktop',
-                chromeMediaSourceId: source.id,
+                chromeMediaSourceId: audioSourceId,
               },
             },
             video: false,
           });
+          console.log('[video-recorder] System audio captured via source:', audioSourceId);
           tabAudio.getAudioTracks().forEach(t => recordStream.addTrack(t));
         } catch (e) {
-          console.warn('[video-recorder] Tab audio not available:', e.message);
+          console.warn('[video-recorder] System audio not available:', e.message);
         }
       }
 
