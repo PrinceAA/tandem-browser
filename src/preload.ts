@@ -110,6 +110,22 @@ contextBridge.exposeInMainWorld('tandem', {
   ) => ipcRenderer.invoke('capture-screenshot', { mode, region }),
   showScreenshotMenu: (anchor: { x: number; y: number }) => ipcRenderer.invoke('show-screenshot-menu', anchor),
 
+  // Recording
+  startRecording: (mode: 'application' | 'region', region?: { x: number; y: number; width: number; height: number }) =>
+    ipcRenderer.invoke('start-recording', { mode, region }),
+  stopRecording: () => ipcRenderer.invoke('stop-recording'),
+  sendRecordingChunk: (data: ArrayBuffer) => ipcRenderer.send('recording-chunk', data),
+  onRecordingModeSelected: (callback: (mode: 'application' | 'region') => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, mode: 'application' | 'region') => callback(mode);
+    ipcRenderer.on('recording-mode-selected', handler);
+    return () => ipcRenderer.removeListener('recording-mode-selected', handler);
+  },
+  onRecordingFinished: (callback: (data: { path: string; filename: string; duration: number }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: { path: string; filename: string; duration: number }) => callback(data);
+    ipcRenderer.on('recording-finished', handler);
+    return () => ipcRenderer.removeListener('recording-finished', handler);
+  },
+
   // Voice
   onVoiceToggle: (callback: (data: { listening: boolean }) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, data: { listening: boolean }) => callback(data);
