@@ -130,7 +130,12 @@
         const source = await window.tandem.getDesktopSource();
         if (!source) {
           console.error('[video-recorder] No desktop source found');
-          alert('Screen recording is not available.');
+          alert('Screen recording is not available. No capture source found.');
+          return;
+        }
+        if (source.error === 'screen-permission-denied') {
+          console.warn('[video-recorder] Screen Recording permission denied');
+          alert('Screen Recording permission is required.\n\nGo to System Settings → Privacy & Security → Screen Recording and enable Tandem.');
           return;
         }
 

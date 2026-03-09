@@ -258,11 +258,20 @@ export function registerIpcHandlers(deps: IpcDeps): void {
   // ═══ Desktop Source for Renderer Video Capture ═══
   ipcMain.handle('get-desktop-source', async () => {
     try {
+      // On macOS, check Screen Recording permission before attempting capture
+      if (process.platform === 'darwin') {
+        const { systemPreferences } = require('electron');
+        const status = systemPreferences.getMediaAccessStatus('screen');
+        if (status !== 'granted') {
+          log.warn(`Screen Recording permission not granted (status: ${status})`);
+          return { error: 'screen-permission-denied' };
+        }
+      }
       const sources = await desktopCapturer.getSources({ types: ['window'], fetchWindowIcons: false });
       const tandemSource = sources.find((s: Electron.DesktopCapturerSource) => s.name.includes('Tandem')) || sources[0];
       return tandemSource ? { id: tandemSource.id, name: tandemSource.name } : null;
     } catch (error) {
-      log.warn('Failed to get desktop sources (Wayland screencast may not be supported):', error instanceof Error ? error.message : error);
+      log.warn('Failed to get desktop sources:', error instanceof Error ? error.message : error);
       return null;
     }
   });
