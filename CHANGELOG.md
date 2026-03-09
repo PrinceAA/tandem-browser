@@ -2,6 +2,14 @@
 
 All notable changes to Tandem Browser will be documented in this file.
 
+## [v0.57.4] - 2026-03-09
+
+- fix: use screen source for system audio capture
+
+Window sources don't include audio on macOS. Now fetches both a window
+source (for video) and a screen source (for audio) from desktopCapturer.
+The screen source captures all system audio via ScreenCaptureKit.
+
 ## [v0.57.3] - 2026-03-09
 
 - fix: force 30fps output in ffmpeg conversion
