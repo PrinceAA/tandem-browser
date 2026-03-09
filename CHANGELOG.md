@@ -2,6 +2,10 @@
 
 All notable changes to Tandem Browser will be documented in this file.
 
+## [v0.55.0] - 2026-03-09
+
+- feat: add Record Application/Region to screenshot menu and recording IPC handlers
+
 ## [v0.54.0] - 2026-03-09
 
 - feat: add recording overlay bar HTML and CSS
