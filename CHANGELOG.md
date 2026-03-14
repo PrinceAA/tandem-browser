@@ -2,6 +2,10 @@
 
 All notable changes to Tandem Browser will be documented in this file.
 
+## [v0.57.13] - 2026-03-14
+
+- fix: address remaining CodeQL alerts (security)
+
 ## [v0.57.12] - 2026-03-14
 
 - fix: harden remaining CodeQL alert clusters (security)
