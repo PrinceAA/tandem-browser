@@ -2,6 +2,10 @@
 
 All notable changes to Tandem Browser will be documented in this file.
 
+## [v0.57.9] - 2026-03-14
+
+- fix: split evaluate request destructuring
+
 ## [v0.57.8] - 2026-03-14
 
 - fix: auto-wrap window.location navigation in /devtools/evaluate
