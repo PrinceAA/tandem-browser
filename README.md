@@ -128,6 +128,57 @@ If you are evaluating Tandem as a product, assume OpenClaw integration is a
 core part of the intended workflow rather than an optional extra. Tandem should
 be understood as a first-party OpenClaw companion browser.
 
+## How OpenClaw Connects To Tandem
+
+OpenClaw does not discover Tandem automatically just because both are installed.
+The connection works when these pieces are in place on the same machine:
+
+- Tandem is running and serving its local API on `http://127.0.0.1:8765`
+- OpenClaw uses the Tandem skill and sends requests to that local API
+- OpenClaw reads the Tandem bearer token from `~/.tandem/api-token`
+- For the in-app Wingman chat experience, the local OpenClaw gateway also needs
+  to be running on `ws://127.0.0.1:18789`
+
+In practice, Tandem is the browser surface and local API. OpenClaw is the agent
+runtime that uses that API.
+
+## Minimum Setup For Testers
+
+If you want to test Tandem with an existing OpenClaw installation, the minimum
+setup is:
+
+- Tandem Browser checked out and started locally
+- a valid Tandem API token in `~/.tandem/api-token`
+- OpenClaw installed on the same machine
+- the updated Tandem skill available to the OpenClaw agent
+
+For full Wingman chat integration inside Tandem, also ensure:
+
+- the OpenClaw gateway is running locally
+- `~/.openclaw/openclaw.json` exists and contains the gateway auth token
+
+## Verify The Connection
+
+Use these commands to verify that Tandem is reachable and that OpenClaw has the
+information it needs:
+
+```bash
+TOKEN="$(cat ~/.tandem/api-token)"
+
+curl -sS http://127.0.0.1:8765/status
+
+curl -sS http://127.0.0.1:8765/tabs/list \
+  -H "Authorization: Bearer $TOKEN"
+
+test -f ~/.openclaw/openclaw.json && echo "OpenClaw config found"
+```
+
+Expected result:
+
+- `/status` returns a live Tandem status payload
+- `/tabs/list` returns JSON instead of `401 Unauthorized`
+- the OpenClaw config file exists if you want Wingman chat inside Tandem
+
 ## Public API Snapshot
 
 Examples:
