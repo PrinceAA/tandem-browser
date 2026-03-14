@@ -29,7 +29,7 @@ Tandem is currently a public `developer preview`.
 - primary platform: macOS
 - secondary platform: Linux
 - Windows is not actively validated yet
-- current version: `0.57.4`
+- current version: `0.57.6`
 - current release history: [CHANGELOG.md](CHANGELOG.md)
 
 The repository is intended to be public and usable by contributors, but not
