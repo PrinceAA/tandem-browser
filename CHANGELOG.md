@@ -9,6 +9,7 @@ All notable changes to Tandem Browser will be documented in this file.
 ## [Unreleased]
 
 - fix: make application screenshot capture fall back cleanly when macOS window capture metadata is unavailable
+- fix: tolerate missing screen audio source lookup during application recording setup
 - docs: align public-facing repo docs for developer preview and first-party OpenClaw positioning
 
 ## [v0.57.4] - 2026-03-09

@@ -272,13 +272,19 @@ export function registerIpcHandlers(deps: IpcDeps): void {
       const tandemSource = windowSources.find((s: Electron.DesktopCapturerSource) => s.name.includes('Tandem')) || windowSources[0];
 
       // Get screen source for audio (window sources don't include audio on macOS)
-      const screenSources = await desktopCapturer.getSources({ types: ['screen'], fetchWindowIcons: false });
-      const screenSource = screenSources[0];
+      // This is optional - don't let it block recording if it fails
+      let audioSourceId: string | null = null;
+      try {
+        const screenSources = await desktopCapturer.getSources({ types: ['screen'], fetchWindowIcons: false });
+        audioSourceId = screenSources[0]?.id || null;
+      } catch (err) {
+        log.warn('Failed to get screen source for audio:', err instanceof Error ? err.message : err);
+      }
 
       return tandemSource ? {
         id: tandemSource.id,
         name: tandemSource.name,
-        audioSourceId: screenSource?.id || null,
+        audioSourceId,
       } : null;
     } catch (error) {
       log.warn('Failed to get desktop sources:', error instanceof Error ? error.message : error);
