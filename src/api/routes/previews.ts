@@ -172,7 +172,11 @@ export function registerPreviewRoutes(router: Router, ctx: RouteContext): void {
 
       // Open in a new tab by default (openTab defaults to true)
       if (openTab !== false) {
-        await ctx.tabManager.openTab(url);
+        const newTab = await ctx.tabManager.openTab(url, undefined, 'wingman', 'persist:tandem', true);
+        // Explicit focus to ensure the tab comes to the front
+        if (newTab) {
+          setTimeout(() => ctx.tabManager.focusTab(newTab.id), 150);
+        }
       }
 
       res.json({ ok: true, id, url, title: preview.title });
