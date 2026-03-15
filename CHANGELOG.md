@@ -2,6 +2,10 @@
 
 All notable changes to Tandem Browser will be documented in this file.
 
+## [v0.60.3] - 2026-03-16
+
+- fix: warm up mic via getUserMedia before SpeechRecognition to ensure permission is active
+
 ## [v0.60.2] - 2026-03-16
 
 - fix: request macOS microphone permission before starting voice input
