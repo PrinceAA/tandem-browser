@@ -2,6 +2,10 @@
 
 All notable changes to Tandem Browser will be documented in this file.
 
+## [v0.59.4] - 2026-03-15
+
+- fix: make preview routes public so HTML pages load in browser tabs without Bearer token
+
 ## [v0.59.3] - 2026-03-15
 
 - fix: explicitly focus new tab after preview creation
