@@ -2,6 +2,10 @@
 
 All notable changes to Tandem Browser will be documented in this file.
 
+## [v0.57.16] - 2026-03-15
+
+- fix: bypass gatekeeper script blocking for trusted linkedin cdn domains
+
 ## [v0.57.15] - 2026-03-15
 
 - fix: add snap.licdn.com and media subdomains to allowlist for linkedin profile images
