@@ -2,6 +2,10 @@
 
 All notable changes to Tandem Browser will be documented in this file.
 
+## [v0.59.9] - 2026-03-15
+
+- fix: sync panel open state to backend so notifications are suppressed when chat is visible
+
 ## [v0.59.8] - 2026-03-15
 
 - fix: null-safe backend button references after chat selector cleanup
