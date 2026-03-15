@@ -126,13 +126,27 @@ export class VideoRecorderManager {
 
     try {
       await this.convertToMp4(tmpPath, moviesPath);
-      fs.copyFileSync(moviesPath, appPath);
+
+      // Verify the output file is valid (moov atom check via file size sanity)
+      const outputStats = fs.existsSync(moviesPath) ? fs.statSync(moviesPath) : null;
+      if (!outputStats || outputStats.size < 1024) {
+        throw new Error(`Output file missing or too small (${outputStats?.size ?? 0} bytes)`);
+      }
+
       try { fs.unlinkSync(tmpPath); } catch { /* ignore */ }
     } catch (e) {
       log.warn('ffmpeg conversion failed, keeping WebM:', e);
+      // Keep the webm as fallback — rename to movies dir so user can find it
       const webmFilename = `tandem-recording-${timestamp}.webm`;
-      const fallbackPath = path.join(this.recordingsDir, webmFilename);
-      try { fs.renameSync(tmpPath, fallbackPath); } catch { /* ignore */ }
+      const fallbackMoviesPath = path.join(this.moviesDir, webmFilename);
+      const fallbackAppPath = path.join(this.recordingsDir, webmFilename);
+      try {
+        fs.copyFileSync(tmpPath, fallbackMoviesPath);
+        fs.copyFileSync(tmpPath, fallbackAppPath);
+        fs.unlinkSync(tmpPath);
+      } catch { /* ignore */ }
+      // Clean up corrupt mp4 if it was partially written
+      if (fs.existsSync(moviesPath)) try { fs.unlinkSync(moviesPath); } catch { /* ignore */ }
       return { ok: false, error: `ffmpeg conversion failed: ${e instanceof Error ? e.message : e}` };
     }
 
@@ -197,6 +211,7 @@ export class VideoRecorderManager {
 
   forceStop(): void {
     if (!this.recording) return;
+    const tmpPath = this.currentTmpPath;
     if (this.writeStream) {
       this.writeStream.end();
       this.writeStream = null;
@@ -206,5 +221,21 @@ export class VideoRecorderManager {
     this.startTime = 0;
     this.currentTmpPath = null;
     log.info('Recording force-stopped on app quit');
+
+    // Try to convert the webm to mp4 in the background even on force-stop
+    if (tmpPath && fs.existsSync(tmpPath)) {
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const mp4Filename = `tandem-recording-${timestamp}.mp4`;
+      const moviesPath = path.join(this.moviesDir, mp4Filename);
+      log.info(`Force-stop: converting ${tmpPath} → ${moviesPath}`);
+      this.convertToMp4(tmpPath, moviesPath)
+        .then(() => {
+          log.info(`Force-stop conversion done: ${mp4Filename}`);
+          try { fs.unlinkSync(tmpPath); } catch { /* ignore */ }
+        })
+        .catch(e => {
+          log.warn('Force-stop conversion failed, keeping webm:', e instanceof Error ? e.message : e);
+        });
+    }
   }
 }
