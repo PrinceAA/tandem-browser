@@ -2,6 +2,10 @@
 
 All notable changes to Tandem Browser will be documented in this file.
 
+## [v0.59.1] - 2026-03-15
+
+- fix: use safeSetPanelHTML to preserve webview sessions during panel content updates
+
 ## [v0.59.0] - 2026-03-15
 
 **Live HTML preview system — build and iterate pages directly inside Tandem**
