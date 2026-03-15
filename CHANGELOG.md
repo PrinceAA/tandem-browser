@@ -4,15 +4,62 @@ All notable changes to Tandem Browser will be documented in this file.
 
 ## [v0.59.0] - 2026-03-15
 
-- feat: add preview system — persistent HTML previews at /preview/:id with live reload
+**Live HTML preview system — build and iterate pages directly inside Tandem**
+
+OpenClaw can now create, update, and serve live HTML previews inside Tandem Browser. The workflow: ask your agent to build a page, it appears instantly in a new tab, you give feedback, the agent updates it, the tab refreshes automatically. No external tools, no file:// URLs, no dev servers.
+
+### New endpoints
+
+- `POST /preview` — create a new preview from HTML. Tandem opens it in a new tab automatically. Pass `title`, `html`, and optionally `inspiration` (source URL for reference). Returns the stable preview URL.
+- `PUT /preview/:id` — update an existing preview. The tab auto-refreshes within 2 seconds via a lightweight polling script injected into the page. Version counter increments on every update.
+- `GET /preview/:id` — serve the preview as a real HTTP page (not file://). Bookmarkable, shareable within the local machine, works with external fonts and CDN resources.
+- `GET /preview/:id/meta` — metadata only (id, title, version, dates). Used internally by the live-reload script.
+- `GET /previews` — list all saved previews as JSON.
+- `GET /previews/index` — human-readable index page of all previews.
+- `DELETE /preview/:id` — remove a preview.
+
+### Storage
+
+Previews are persisted to `~/.tandem/previews/<id>.json`. Each file contains the full HTML, title, inspiration URL, creation/update timestamps, and a version counter. Previews survive Tandem restarts. IDs are slugified from the title (`robin-portfolio`, `kanbu-landing-page`, etc.) and deduplicated automatically.
+
+### Live reload
+
+Every preview page gets a small injected script that polls `/preview/:id/meta` every 2 seconds. When the version number changes, the page reloads. This means the agent can iterate on a design while the human watches the result update in real time — no manual refresh needed.
+
+### Workflow example
+
+```
+You:   "build me a portfolio page inspired by this site: https://example.com"
+Agent: opens https://example.com in one tab, reads the design
+Agent: generates HTML/CSS, POSTs to /preview
+Tandem: opens http://127.0.0.1:8765/preview/my-portfolio in a new tab
+You:   "make the header bigger and change the color to dark blue"
+Agent: PUTs updated HTML to /preview/my-portfolio
+Tab:   auto-refreshes within 2 seconds
+You:   bookmark the URL — it persists across restarts
+```
 
 ## [v0.58.0] - 2026-03-15
 
-- feat: add GET /active-tab/context endpoint for OpenClaw page awareness
+**Active tab context — OpenClaw now knows what you're looking at**
+
+Added `GET /active-tab/context` — a single endpoint that gives OpenClaw everything it needs to understand what the user is currently viewing, without multiple round-trips.
+
+Response includes:
+- active tab id, URL, title, loading state
+- viewport dimensions and scroll position
+- first 1500 characters of page text (enough to answer questions without a full `/page-content` call)
+- full tab list with active flag
+
+Also documented the existing `GET /events/stream` SSE endpoint and `tab-focused` events in the skill file, so agents can subscribe to tab switches without polling. Updated `skill/SKILL.md` with a dedicated "Page Awareness" section.
 
 ## [v0.57.22] - 2026-03-15
 
-- fix: keep sidebar webviews permanently in DOM to preserve login state across panel switches
+**Sidebar login persistence fix**
+
+Sidebar webviews (Telegram, WhatsApp, Discord, Slack, Gmail, etc.) were losing their login state every time the panel was switched or the sidebar setup panel was opened. Root cause: Electron destroys and recreates a `<webview>` session when the element is removed from the DOM.
+
+Fix: moved all sidebar webviews into a persistent `#sidebar-webview-host` container that is never wiped. Panel switches now show/hide webviews without touching the DOM. Login state is preserved for the lifetime of the Tandem session.
 
 ## [v0.57.21] - 2026-03-15
 
