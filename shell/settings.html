@@ -1103,6 +1103,7 @@
 
       // Appearance/Theme
       setVal('cfg-theme', a.theme || 'dark');
+      applyTheme(a.theme || 'dark');
       setVal('cfg-language', g.language || 'nl-BE');
       setVal('cfg-wingmanPanelPosition', g.wingmanPanelPosition || 'right');
       setChecked('cfg-wingmanPanelDefaultOpen', !!g.wingmanPanelDefaultOpen);
@@ -1571,6 +1572,12 @@
       } else {
         document.documentElement.removeAttribute('data-theme'); // Default dark
       }
+      // Broadcast to all other renderer windows via BroadcastChannel
+      try {
+        const bc = new BroadcastChannel('tandem-theme');
+        bc.postMessage({ theme });
+        bc.close();
+      } catch {}
     }
 
     // ═══ Chrome sync ═══
