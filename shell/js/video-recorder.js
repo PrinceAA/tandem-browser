@@ -192,7 +192,7 @@
 
       // Try to add system/tab audio (macOS/Windows only - Linux gets it via getDisplayMedia)
       // On macOS, window sources don't include audio — use screen source instead
-      if (!isLinux) {
+      if (!isLinux && typeof source !== 'undefined') {
         const audioSourceId = source.audioSourceId || source.id;
         try {
           const tabAudio = await navigator.mediaDevices.getUserMedia({
