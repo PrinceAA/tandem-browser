@@ -2,6 +2,10 @@
 
 All notable changes to Tandem Browser will be documented in this file.
 
+## [v0.59.16] - 2026-03-15
+
+- fix: add background to main-layout and browser-content to prevent dark gap in light theme
+
 ## [v0.59.15] - 2026-03-15
 
 - fix: add theme support to newtab page — CSS variables + BroadcastChannel sync
