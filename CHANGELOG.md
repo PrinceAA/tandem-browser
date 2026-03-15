@@ -2,6 +2,10 @@
 
 All notable changes to Tandem Browser will be documented in this file.
 
+## [v0.57.14] - 2026-03-15
+
+- fix: add domain allowlist to network shield to prevent blocking linkedin first-party domains
+
 ## [v0.57.13] - 2026-03-14
 
 - fix: address remaining CodeQL alerts (security)
