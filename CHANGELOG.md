@@ -2,6 +2,10 @@
 
 All notable changes to Tandem Browser will be documented in this file.
 
+## [v0.59.3] - 2026-03-15
+
+- fix: explicitly focus new tab after preview creation
+
 ## [v0.59.2] - 2026-03-15
 
 - fix: webview stays within sidebar-panel-content bounds, header no longer covered
