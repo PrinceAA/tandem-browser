@@ -23,6 +23,17 @@ const log = createLogger('Guardian');
 const DANGEROUS_EXTENSIONS = new Set(['.exe', '.scr', '.bat', '.cmd', '.ps1', '.vbs', '.msi', '.dll']);
 const OUTBOUND_METHODS = new Set(['POST', 'PUT', 'PATCH']);
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
+
+// Trusted first-party CDN domains — scripts from these are never blocked by the gatekeeper,
+// even when the domain has a low trust score (e.g. first visit).
+const TRUSTED_SCRIPT_DOMAINS = new Set([
+  'static.licdn.com',
+  'static-exp1.licdn.com',
+  'static-exp2.licdn.com',
+  'platform.linkedin.com',
+  'snap.licdn.com',
+  'media.licdn.com',
+]);
 const GATEKEEPER_PENDING_LIMIT = 100;
 const GATEKEEPER_HOLD_TIMEOUT_MS = 4_000;
 const GATEKEEPER_DENY_TIMEOUT_MS = 6_000;
@@ -475,15 +486,18 @@ export class Guardian {
     const isFirstVisit = !input.info || visitCount <= 1;
 
     if (input.resourceType === 'script' && input.mode === 'strict' && trust < 50) {
-      return {
-        decisionClass: 'deny_on_timeout',
-        reason: 'strict_low_trust_script',
-        severity: trust < 20 ? 'high' : 'medium',
-        context: {
-          trust,
-          resourceType: input.resourceType,
-        },
-      };
+      // Skip blocking for known trusted first-party CDN domains
+      if (!TRUSTED_SCRIPT_DOMAINS.has(input.domain)) {
+        return {
+          decisionClass: 'deny_on_timeout',
+          reason: 'strict_low_trust_script',
+          severity: trust < 20 ? 'high' : 'medium',
+          context: {
+            trust,
+            resourceType: input.resourceType,
+          },
+        };
+      }
     }
 
     if (input.resourceType === 'download' && input.dangerousDownloadExt && input.mode !== 'permissive') {
