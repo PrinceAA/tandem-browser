@@ -2,6 +2,10 @@
 
 All notable changes to Tandem Browser will be documented in this file.
 
+## [v0.57.17] - 2026-03-15
+
+- fix: skip rule engine for trusted cdn domains to prevent false positive containment on linkedin
+
 ## [v0.57.16] - 2026-03-15
 
 - fix: bypass gatekeeper script blocking for trusted linkedin cdn domains
