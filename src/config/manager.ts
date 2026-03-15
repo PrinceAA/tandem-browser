@@ -213,23 +213,20 @@ export class ConfigManager {
   }
 
   /**
-   * Auto-sync webhook.secret with OpenClaw hooks.token (if webhook.secret is empty).
+   * Auto-sync webhook.secret with OpenClaw hooks.token.
    * Runs async during startup, does not block config load.
+   * Always syncs — not just when empty — so token rotations are picked up automatically.
    */
   private async autoSyncWebhookSecret(): Promise<void> {
-    if (this.config.webhook.secret && this.config.webhook.secret.trim().length > 0) {
-      // Secret already set — nothing to do
-      return;
-    }
-
-    log.info('🔍 webhook.secret empty — checking for OpenClaw...');
     const status = await detectOpenClaw();
 
     if (status.ok && status.hooksToken) {
-      log.info('✅ Auto-synced webhook.secret with OpenClaw hooks.token');
-      this.config.webhook.secret = status.hooksToken;
-      this.save();
-    } else {
+      if (this.config.webhook.secret !== status.hooksToken) {
+        log.info('✅ Auto-synced webhook.secret with OpenClaw hooks.token');
+        this.config.webhook.secret = status.hooksToken;
+        this.save();
+      }
+    } else if (!this.config.webhook.secret) {
       log.debug('OpenClaw not detected — webhook.secret remains empty');
     }
   }
