@@ -379,9 +379,9 @@
       const dotBoth = document.getElementById('dot-both');
 
       function updateBackendUI(activeId) {
-        btnOC.classList.toggle('active', activeId === 'openclaw');
-        btnCL.classList.toggle('active', activeId === 'claude');
-        btnBoth.classList.toggle('active', activeId === 'both');
+        if (btnOC) btnOC.classList.toggle('active', activeId === 'openclaw');
+        if (btnCL) btnCL.classList.toggle('active', activeId === 'claude');
+        if (btnBoth) btnBoth.classList.toggle('active', activeId === 'both');
 
         if (activeId === 'both') {
           // In both mode — OpenClaw always available via webhook
@@ -488,21 +488,21 @@
         }).catch(() => { });
       }
 
-      btnOC.addEventListener('click', () => switchBackend('openclaw'));
-      btnCL.addEventListener('click', () => switchBackend('claude'));
-      btnBoth.addEventListener('click', () => switchBackend('both'));
+      if (btnOC) btnOC.addEventListener('click', () => switchBackend('openclaw'));
+      if (btnCL) btnCL.addEventListener('click', () => switchBackend('claude'));
+      if (btnBoth) btnBoth.addEventListener('click', () => switchBackend('both'));
 
       // ── Connection status dots ──
 
       router.onConnectionChange((connected, backendId) => {
         if (backendId === 'openclaw') {
           // OpenClaw always "connected" via webhook path (WebSocket is optional for receiving)
-          dotOC.classList.add('connected');
+          if (dotOC) dotOC.classList.add('connected');
         } else if (backendId === 'claude') {
-          dotCL.classList.toggle('connected', connected);
+          if (dotCL) dotCL.classList.toggle('connected', connected);
         }
         // Update "both" dot — OpenClaw always available
-        dotBoth.classList.add('connected');
+        if (dotBoth) dotBoth.classList.add('connected');
 
         // Update status bar for current mode
         if (currentMode === 'both') {
