@@ -2,6 +2,10 @@
 
 All notable changes to Tandem Browser will be documented in this file.
 
+## [v0.62.4] - 2026-03-16
+
+- fix: remove unused detectBackend import, fix async Promise executor lint errors
+
 ## [v0.62.3] - 2026-03-16
 
 - fix: hide mic button on macOS (use system dictation), show only on Linux
