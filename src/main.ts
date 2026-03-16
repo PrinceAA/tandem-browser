@@ -28,7 +28,7 @@ import { createLogger } from './utils/logger';
 import { createManagerRegistry, destroyRuntime, initializeRuntimeManagers, registerRuntimeIpcHandlers } from './bootstrap/runtime';
 import { registerInitialTabLifecycle } from './bootstrap/tab-session';
 import type { PendingTabRegister, RuntimeManagers } from './bootstrap/types';
-import { isGoogleAuthUrl, pathnameMatchesPrefix, tryParseUrl, urlHasProtocol, hostnameMatches } from './utils/security';
+import { isGoogleAuthUrl, shouldSkipStealth, pathnameMatchesPrefix, tryParseUrl, urlHasProtocol, hostnameMatches } from './utils/security';
 
 const log = createLogger('Main');
 
@@ -262,10 +262,10 @@ async function createWindow(): Promise<BrowserWindow> {
 
     if (contents.getType() === 'webview') {
       contents.on('dom-ready', () => {
-        // Skip stealth injection on Google auth pages — our patches break their login detection
+        // Skip stealth injection on sites that detect and block stealth patches
         const url = contents.getURL();
-        if (isGoogleAuthUrl(url)) {
-          log.info('🔑 Skipping stealth for Google auth:', url.substring(0, 60));
+        if (isGoogleAuthUrl(url) || shouldSkipStealth(url)) {
+          log.info('🔑 Skipping stealth for:', url.substring(0, 60));
           return;
         }
         contents.executeJavaScript(stealthScript).catch((e) => log.warn('Stealth script injection failed:', e.message));
