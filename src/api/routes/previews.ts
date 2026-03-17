@@ -18,7 +18,7 @@ import fs from 'fs';
 import path from 'path';
 import { tandemDir } from '../../utils/paths';
 import { handleRouteError } from '../../utils/errors';
-import { assertSinglePathSegment, escapeHtml } from '../../utils/security';
+import { assertSinglePathSegment, escapeHtml, resolvePathWithinRoot } from '../../utils/security';
 import type { RouteContext } from '../context';
 import { createLogger } from '../../utils/logger';
 
@@ -33,7 +33,7 @@ function previewsDir(): string {
 }
 
 function previewPath(id: string): string {
-  return path.join(previewsDir(), `${id}.json`);
+  return resolvePathWithinRoot(previewsDir(), `${id}.json`);
 }
 
 function slugify(title: string): string {
