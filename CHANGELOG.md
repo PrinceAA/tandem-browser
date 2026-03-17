@@ -4,15 +4,6 @@ All notable changes to Tandem Browser will be documented in this file.
 
 ## [v0.62.12] - 2026-03-17
 
-- fix: use resolvePathWithinRoot in previewPath to satisfy CodeQL
-
-assertSinglePathSegment already blocks traversal, but CodeQL cannot
-trace that validation. Adding resolvePathWithinRoot as a second guard
-in previewPath() itself makes the path restriction visible to static
-analysis.
-
-## [v0.62.11] - 2026-03-17
-
 - fix: sanitize preview IDs to prevent path traversal and reflected XSS (security)
 
 ## [v0.62.9] - 2026-03-16
