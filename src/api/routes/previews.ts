@@ -18,6 +18,7 @@ import fs from 'fs';
 import path from 'path';
 import { tandemDir } from '../../utils/paths';
 import { handleRouteError } from '../../utils/errors';
+import { assertSinglePathSegment, escapeHtml, resolvePathWithinRoot } from '../../utils/security';
 import type { RouteContext } from '../context';
 import { createLogger } from '../../utils/logger';
 
@@ -32,7 +33,7 @@ function previewsDir(): string {
 }
 
 function previewPath(id: string): string {
-  return path.join(previewsDir(), `${id}.json`);
+  return resolvePathWithinRoot(previewsDir(), `${id}.json`);
 }
 
 function slugify(title: string): string {
@@ -188,7 +189,8 @@ export function registerPreviewRoutes(router: Router, ctx: RouteContext): void {
   // Update an existing preview (triggers live reload in the browser)
   router.put('/preview/:id', (req: Request, res: Response) => {
     try {
-      const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+      const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+      const id = assertSinglePathSegment(rawId, 'preview ID');
       const existing = readPreview(id);
       if (!existing) {
         res.status(404).json({ error: `Preview '${id}' not found` });
@@ -222,7 +224,8 @@ export function registerPreviewRoutes(router: Router, ctx: RouteContext): void {
   // Serve preview metadata (used by live reload polling)
   router.get('/preview/:id/meta', (req: Request, res: Response) => {
     try {
-      const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+      const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+      const id = assertSinglePathSegment(rawId, 'preview ID');
       const preview = readPreview(id);
       if (!preview) {
         res.status(404).json({ error: `Preview '${id}' not found` });
@@ -238,12 +241,13 @@ export function registerPreviewRoutes(router: Router, ctx: RouteContext): void {
   // Serve the preview HTML page
   router.get('/preview/:id', (req: Request, res: Response) => {
     try {
-      const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+      const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+      const id = assertSinglePathSegment(rawId, 'preview ID');
       const preview = readPreview(id);
       if (!preview) {
         res.status(404).send(`<!DOCTYPE html><html><body>
           <h1>Preview not found</h1>
-          <p>No preview with id <code>${id}</code> exists.</p>
+          <p>No preview with id <code>${escapeHtml(id)}</code> exists.</p>
           <p><a href="http://127.0.0.1:8765/previews">View all previews</a></p>
         </body></html>`);
         return;
@@ -259,7 +263,8 @@ export function registerPreviewRoutes(router: Router, ctx: RouteContext): void {
   // Delete a preview
   router.delete('/preview/:id', (req: Request, res: Response) => {
     try {
-      const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+      const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+      const id = assertSinglePathSegment(rawId, 'preview ID');
       const p = previewPath(id);
       if (!fs.existsSync(p)) {
         res.status(404).json({ error: `Preview '${id}' not found` });

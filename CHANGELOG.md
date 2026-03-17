@@ -2,6 +2,10 @@
 
 All notable changes to Tandem Browser will be documented in this file.
 
+## [v0.62.12] - 2026-03-17
+
+- fix: sanitize preview IDs to prevent path traversal and reflected XSS (security)
+
 ## [v0.62.9] - 2026-03-16
 
 - fix: remove all duplicate files with spaces in names from repo
