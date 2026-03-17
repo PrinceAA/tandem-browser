@@ -66,7 +66,7 @@ This repository is a public `developer preview` — real project, early public s
 - primary platform: macOS
 - secondary platform: Linux
 - Windows is not actively validated yet
-- current version: `0.57.21`
+- current version: `0.62.16`
 - current release history: [CHANGELOG.md](CHANGELOG.md)
 
 The goal of making the repository public is to let other contributors, maintainers, and OpenClaw-adjacent builders help improve the browser over time — not just to show it.
@@ -199,6 +199,8 @@ The connection works when these pieces are in place on the same machine:
 - OpenClaw reads the Tandem bearer token from `~/.tandem/api-token`
 - For the in-app Wingman chat experience, the local OpenClaw gateway also needs
   to be running on `ws://127.0.0.1:18789`
+- No extra local Tandem chat bridge, polling job, or custom OpenClaw skill is
+  required for stock Wingman chat
 
 In practice, Tandem is the browser surface and local API. OpenClaw is the agent
 runtime that uses that API.
@@ -211,12 +213,14 @@ setup is:
 - Tandem Browser checked out and started locally
 - a valid Tandem API token in `~/.tandem/api-token`
 - OpenClaw installed on the same machine
-- the updated Tandem skill available to the OpenClaw agent
+- the Tandem skill available to the OpenClaw agent
 
 For full Wingman chat integration inside Tandem, also ensure:
 
 - the OpenClaw gateway is running locally
 - `~/.openclaw/openclaw.json` exists and contains the gateway auth token
+- do not add a separate legacy Tandem `/chat` polling or webhook bridge unless
+  you are debugging an old local setup
 
 ## Verify The Connection
 

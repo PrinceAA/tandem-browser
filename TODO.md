@@ -14,7 +14,7 @@ Last updated: March 17, 2026
 
 ## Current Snapshot
 
-- Current app version: `0.62.14`
+- Current app version: `0.62.16`
 - The codebase scope is larger than this backlog summary and includes major subsystems such as `sidebar`, `workspaces`, `pinboards`, `sync`, `headless`, and `sessions`.
 - Scheduled browsing already exists in baseline form via `WatchManager` and the `/watch/*` API routes.
 - Session isolation already exists in baseline form via `SessionManager` and the `/sessions/*` API routes.
