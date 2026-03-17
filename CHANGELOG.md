@@ -6,20 +6,6 @@ All notable changes to Tandem Browser will be documented in this file.
 
 - fix: sanitize preview IDs to prevent path traversal and reflected XSS (security)
 
-Preview routes accepted unsanitized :id params from the URL, allowing
-path traversal (../../) to read/write/delete .json files outside the
-previews directory, and reflected XSS via the 404 page.
-
-Added assertSinglePathSegment() validation to all four :id route handlers
-and escapeHtml() to the 404 response. Both guards already existed in
-src/utils/security.ts.
-
-Bump to v0.62.10.
-
-## [v0.62.10] - 2026-03-17
-
-- fix: sanitize preview IDs to prevent path traversal and reflected XSS (security)
-
 ## [v0.62.9] - 2026-03-16
 
 - fix: remove all duplicate files with spaces in names from repo
