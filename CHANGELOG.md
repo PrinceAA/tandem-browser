@@ -2,6 +2,10 @@
 
 All notable changes to Tandem Browser will be documented in this file.
 
+## [v0.63.1] - 2026-03-20
+
+- fix: UI/UX polish pass v0.63.0 — 18 fixes across shell, sidebar, settings, screenshots
+
 ## [v0.63.0] - 2026-03-20
 
 UI/UX polish pass — 18 fixes across shell, sidebar, settings, and screenshots.
