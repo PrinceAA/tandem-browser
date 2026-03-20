@@ -2,6 +2,10 @@
 
 All notable changes to Tandem Browser will be documented in this file.
 
+## [v0.63.4] - 2026-03-20
+
+- fix: increase V8 heap limit to 4GB to prevent OOM on memory-heavy SPAs
+
 ## [v0.63.3] - 2026-03-20
 
 - fix: resolve CI test failures — safe app.getVersion(), update quickLinks count in tests
