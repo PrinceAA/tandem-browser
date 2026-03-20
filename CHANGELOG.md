@@ -2,6 +2,10 @@
 
 All notable changes to Tandem Browser will be documented in this file.
 
+## [v0.63.6] - 2026-03-20
+
+- fix: add zhipin.com to stealth skip list — bypasses bot detection after login
+
 ## [v0.63.5] - 2026-03-20
 
 - fix: resolve CHANGELOG merge conflict
