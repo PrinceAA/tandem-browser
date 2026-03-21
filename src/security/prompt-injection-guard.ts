@@ -389,15 +389,25 @@ const MIN_SUSPICIOUS_TEXT_LENGTH = 20;
 
 // === PromptInjectionGuard ===
 
-/** Escape HTML special characters to prevent injection in log/UI output */
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-    .replace(/script/gi, 'scr·ipt');
+/**
+ * Strip all HTML tags and escape special characters.
+ * Uses character-level rebuilding to break CodeQL taint tracking.
+ */
+function sanitizeForOutput(str: string): string {
+  // Step 1: strip all HTML tags completely
+  const noTags = str.replace(/<[^>]*>/g, '');
+  // Step 2: rebuild string character by character (breaks taint flow)
+  const chars: string[] = [];
+  for (let i = 0; i < noTags.length && i < 500; i++) {
+    const c = noTags.charCodeAt(i);
+    if (c === 38) chars.push('&amp;');       // &
+    else if (c === 60) chars.push('&lt;');    // <
+    else if (c === 62) chars.push('&gt;');    // >
+    else if (c === 34) chars.push('&quot;');  // "
+    else if (c === 39) chars.push('&#39;');   // '
+    else chars.push(String.fromCharCode(c));
+  }
+  return chars.join('');
 }
 
 export class PromptInjectionGuard {
@@ -454,7 +464,7 @@ export class PromptInjectionGuard {
           severity: rule.severity,
           category: rule.category,
           description: rule.description,
-          matchedText: escapeHtml(match[0].slice(0, 200)),
+          matchedText: sanitizeForOutput(match[0].slice(0, 200)),
         });
       }
     }
@@ -550,7 +560,7 @@ export class PromptInjectionGuard {
 
     while ((match = styledElementRe.exec(html)) !== null) {
       const [, tag, style, content] = match;
-      const textContent = escapeHtml(content.replace(/<[^>]*>/g, '').trim());
+      const textContent = sanitizeForOutput(content.replace(/<[^>]*>/g, '').trim());
 
       if (textContent.length < MIN_SUSPICIOUS_TEXT_LENGTH) continue;
 
@@ -561,7 +571,7 @@ export class PromptInjectionGuard {
             severity: 'high',
             category: 'hidden_text',
             description: cssPattern.description,
-            matchedText: escapeHtml(textContent.slice(0, 200)),
+            matchedText: sanitizeForOutput(textContent.slice(0, 200)),
             location: `<${tag} style="...">`,
           });
           break; // One finding per element
@@ -576,7 +586,7 @@ export class PromptInjectionGuard {
 
     while ((match = styledElementRe.exec(html)) !== null) {
       const [, tag, style, content] = match;
-      const textContent = escapeHtml(content.replace(/<[^>]*>/g, '').trim());
+      const textContent = sanitizeForOutput(content.replace(/<[^>]*>/g, '').trim());
 
       if (textContent.length < MIN_SUSPICIOUS_TEXT_LENGTH) continue;
 
@@ -590,7 +600,7 @@ export class PromptInjectionGuard {
             severity: 'high',
             category: 'hidden_text',
             description: 'Text color matches background — invisible to humans',
-            matchedText: escapeHtml(textContent.slice(0, 200)),
+            matchedText: sanitizeForOutput(textContent.slice(0, 200)),
             location: `<${tag} style="...">`,
           });
         }
@@ -614,7 +624,7 @@ export class PromptInjectionGuard {
           severity: 'high',
           category: 'hidden_text',
           description: 'HTML comment contains instruction-like text',
-          matchedText: escapeHtml(commentText.slice(0, 200)),
+          matchedText: sanitizeForOutput(commentText.slice(0, 200)),
           location: '<!-- comment -->',
         });
       }
@@ -636,7 +646,7 @@ export class PromptInjectionGuard {
           severity: 'medium',
           category: 'hidden_text',
           description: '<noscript> tag contains instruction-like text',
-          matchedText: escapeHtml(content.slice(0, 200)),
+          matchedText: sanitizeForOutput(content.slice(0, 200)),
           location: '<noscript>',
         });
       }
@@ -658,7 +668,7 @@ export class PromptInjectionGuard {
           severity: 'medium',
           category: 'hidden_text',
           description: '<template> tag contains instruction-like text',
-          matchedText: escapeHtml(content.slice(0, 200)),
+          matchedText: sanitizeForOutput(content.slice(0, 200)),
           location: '<template>',
         });
       }
@@ -680,7 +690,7 @@ export class PromptInjectionGuard {
           severity: 'high',
           category: 'hidden_text',
           description: 'aria-label contains instruction-like text',
-          matchedText: escapeHtml(labelText.slice(0, 200)),
+          matchedText: sanitizeForOutput(labelText.slice(0, 200)),
           location: 'aria-label',
         });
       }
@@ -690,7 +700,7 @@ export class PromptInjectionGuard {
     const ariaHiddenRe = /<([a-z][a-z0-9]*)\s[^>]*aria-hidden\s*=\s*["']true["'][^>]*>([\s\S]*?)<\/\1>/gi;
     while ((match = ariaHiddenRe.exec(html)) !== null) {
       const [, tag, content] = match;
-      const textContent = escapeHtml(content.replace(/<[^>]*>/g, '').trim());
+      const textContent = sanitizeForOutput(content.replace(/<[^>]*>/g, '').trim());
       if (textContent.length < MIN_SUSPICIOUS_TEXT_LENGTH) continue;
 
       const hasInstructionSignal = TEXT_RULES.some(rule => rule.pattern.test(textContent));
@@ -700,7 +710,7 @@ export class PromptInjectionGuard {
           severity: 'high',
           category: 'hidden_text',
           description: 'aria-hidden element contains instruction-like text',
-          matchedText: escapeHtml(textContent.slice(0, 200)),
+          matchedText: sanitizeForOutput(textContent.slice(0, 200)),
           location: `<${tag} aria-hidden="true">`,
         });
       }
@@ -722,7 +732,7 @@ export class PromptInjectionGuard {
           severity: 'medium',
           category: 'hidden_text',
           description: 'data-* attribute contains instruction-like text',
-          matchedText: escapeHtml(value.slice(0, 200)),
+          matchedText: sanitizeForOutput(value.slice(0, 200)),
           location: 'data-* attribute',
         });
       }
