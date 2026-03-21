@@ -493,7 +493,7 @@ export class PromptInjectionGuard {
 
     // Count zero-width characters
     let zeroWidthCount = 0;
-    let zeroWidthPositions: number[] = [];
+    const zeroWidthPositions: number[] = [];
     for (let i = 0; i < text.length; i++) {
       if (ZERO_WIDTH_CHARS.has(text[i])) {
         zeroWidthCount++;
